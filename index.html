@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Run Coach</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F5F7FA;
+    --ink: #0F172A;
+    --ink-mid: #475569;
+    --ink-light: #94A3B8;
+    --line: #E2E8F0;
+    --accent: #F97316;       /* orange — energetic */
+    --accent-dark: #EA580C;
+    --accent-bg: #FFF7ED;
+    --success: #10B981;
+    --success-bg: #ECFDF5;
+    --danger: #EF4444;
+    --radius: 12px;
+    --radius-lg: 18px;
+    --shadow: 0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  header h1 {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  header h1 span { color: var(--accent); }
+  header p {
+    font-size: 15px;
+    color: var(--ink-mid);
+    margin-top: 4px;
+  }
+
+  .card {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.25rem;
+  }
+
+  .card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 1rem;
+  }
+
+  .field { margin-bottom: 1rem; }
+  .field label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .field .hint {
+    font-size: 12px;
+    color: var(--ink-light);
+    margin-bottom: 6px;
+  }
+
+  input[type="date"], input[type="text"], input[type="number"], select {
+    width: 100%;
+    font-family: inherit;
+    font-size: 16px;
+    padding: 10px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius);
+    background: white;
+    color: var(--ink);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(249,115,22,0.12);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) {
+    .row { grid-template-columns: 1fr; }
+  }
+
+  .file-drop {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .file-drop:hover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+  .file-drop input { display: none; }
+  .file-drop .icon { font-size: 32px; }
+  .file-drop .label {
+    font-size: 14px;
+    color: var(--ink-mid);
+    margin-top: 4px;
+  }
+  .file-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .file-thumb {
+    width: 60px; height: 60px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+  }
+
+  button.primary {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.primary:hover { background: var(--accent-dark); }
+  button.primary:disabled {
+    background: var(--ink-light);
+    cursor: not-allowed;
+  }
+
+  .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    margin-bottom: 1rem;
+  }
+  .alert.error { background: #FEE2E2; color: var(--danger); }
+  .alert.success { background: var(--success-bg); color: var(--success); }
+  .hidden { display: none; }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--ink-mid);
+    padding: 2rem 0;
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 3px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Result display */
+  .result-section {
+    margin-top: 1rem;
+  }
+  .result-section h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-light);
+    margin-bottom: 8px;
+  }
+  .result-summary {
+    font-size: 16px;
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .week-row {
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .week-row .week-label {
+    font-weight: 700;
+    color: var(--accent-dark);
+    font-size: 14px;
+  }
+  .week-row .week-focus {
+    font-size: 14px;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+  .week-row .week-workouts {
+    font-size: 13px;
+    color: var(--ink-mid);
+    margin-top: 4px;
+  }
+  .top-rec {
+    background: var(--accent-bg);
+    border-left: 4px solid var(--accent);
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    font-size: 15px;
+    color: var(--ink);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Run <span>Coach</span></h1>
+    <p>Personalized training plans and AI coaching feedback</p>
+  </header>
+
+  <!-- Form -->
+  <div class="card" id="form-card">
+    <h2>Tell us about your race</h2>
+
+    <div id="form-alert" class="alert error hidden"></div>
+
+    <div class="row">
+      <div class="field">
+        <label for="race-distance">Race distance</label>
+        <select id="race-distance">
+          <option value="">Choose…</option>
+          <option value="5K">5K</option>
+          <option value="10K">10K</option>
+          <option value="Half Marathon">Half Marathon</option>
+          <option value="Marathon">Marathon</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="race-date">Race date</label>
+        <input type="date" id="race-date" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="weekly-mileage">Current weekly miles</label>
+        <input type="number" id="weekly-mileage" min="0" max="200" placeholder="e.g. 15" />
+      </div>
+      <div class="field">
+        <label for="goal-time">Goal finish time</label>
+        <input type="text" id="goal-time" placeholder="e.g. 50:00" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="coaching-style">Coaching style</label>
+      <select id="coaching-style">
+        <option value="encouraging">Encouraging — supportive and warm</option>
+        <option value="data-driven">Data-driven — analytical and metric-focused</option>
+        <option value="tough-love">Tough love — direct and pushy</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Upload recent Strava run screenshots</label>
+      <div class="hint">Optional but recommended. Up to 3 screenshots.</div>
+      <label class="file-drop" for="screenshot-input">
+        <div class="icon">📷</div>
+        <div class="label">Tap to upload screenshots</div>
+        <input type="file" id="screenshot-input" accept="image/*" multiple />
+      </label>
+      <div class="file-list" id="file-list"></div>
+    </div>
+
+    <button class="primary" id="submit-btn" onclick="submitForm()">Get my training plan</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="card hidden" id="loading-card">
+    <div class="loading"><div class="spinner"></div>Analyzing your runs and building your plan…</div>
+  </div>
+
+  <!-- Result -->
+  <div class="card hidden" id="result-card">
+    <h2>Your Training Plan</h2>
+    <div id="result-content"></div>
+    <button class="primary" style="margin-top:1rem;background:var(--ink-light);" onclick="resetForm()">Start over</button>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// CONFIG — set after deploying Apps Script
+// ══════════════════════════════════════════════════
+const SCRIPT_URL = ''; // paste your Apps Script web app URL here
+
+// ══════════════════════════════════════════════════
+// File upload handling
+// ══════════════════════════════════════════════════
+let uploadedFiles = []; // [{ name, base64 }]
+
+document.getElementById('screenshot-input').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files).slice(0, 3);
+  uploadedFiles = [];
+  for (const file of files) {
+    const base64 = await fileToBase64(file);
+    uploadedFiles.push({ name: file.name, base64 });
+  }
+  renderFileList();
+});
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]); // strip "data:image/...;base64,"
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFileList() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = uploadedFiles.map(f =>
+    `<img class="file-thumb" src="data:image/png;base64,${f.base64}" alt="${f.name}" />`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════
+// Submit form
+// ══════════════════════════════════════════════════
+async function submitForm() {
+  const distance = document.getElementById('race-distance').value;
+  const date     = document.getElementById('race-date').value;
+  const mileage  = document.getElementById('weekly-mileage').value;
+  const goal     = document.getElementById('goal-time').value;
+  const style    = document.getElementById('coaching-style').value;
+
+  if (!distance || !date) {
+    showAlert('Please choose a race distance and date.');
+    return;
+  }
+  if (!SCRIPT_URL) {
+    showAlert('SCRIPT_URL is not set. Deploy the Apps Script and paste the URL into index.html.');
+    return;
+  }
+
+  document.getElementById('form-card').classList.add('hidden');
+  document.getElementById('loading-card').classList.remove('hidden');
+
+  try {
+    const screenshotBase64 = uploadedFiles.map(f => f.base64).join(',,,');
+    const result = await jsonp({
+      action: 'coach',
+      raceDistance: distance,
+      raceDate: date,
+      weeklyMileage: mileage,
+      goalTime: goal,
+      coachingStyle: style,
+      screenshotBase64: screenshotBase64
+    });
+
+    if (result.error) throw new Error(result.error);
+    renderResult(result.result);
+
+    document.getElementById('loading-card').classList.add('hidden');
+    document.getElementById('result-card').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('loading-card').classList.add('hidden');
+    document.getElementById('form-card').classList.remove('hidden');
+    showAlert('Could not get coaching: ' + e.message);
+  }
+}
+
+function renderResult(r) {
+  if (!r) return;
+  const el = document.getElementById('result-content');
+
+  let html = '';
+  if (r.summary) {
+    html += '<div class="result-section"><h3>Summary</h3><div class="result-summary">' + escape(r.summary) + '</div></div>';
+  }
+  if (r.recentRunAnalysis) {
+    html += '<div class="result-section"><h3>What your runs show</h3><div class="result-summary">' + escape(r.recentRunAnalysis) + '</div></div>';
+  }
+  if (r.trainingPlan && r.trainingPlan.length) {
+    html += '<div class="result-section"><h3>Training plan</h3>';
+    r.trainingPlan.forEach(w => {
+      html += '<div class="week-row">' +
+        '<div class="week-label">Week ' + (w.week || '?') + (w.totalMiles ? ' — ' + w.totalMiles + ' mi' : '') + '</div>' +
+        '<div class="week-focus">' + escape(w.focus || '') + '</div>' +
+        (w.keyWorkouts ? '<div class="week-workouts">' + (Array.isArray(w.keyWorkouts) ? w.keyWorkouts : [w.keyWorkouts]).map(escape).join(' • ') + '</div>' : '') +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  if (r.topRecommendation) {
+    html += '<div class="result-section"><h3>Focus on this</h3><div class="top-rec">' + escape(r.topRecommendation) + '</div></div>';
+  }
+  if (r.raw) {
+    html += '<div class="result-section"><h3>Response</h3><pre style="white-space:pre-wrap;font-size:13px;">' + escape(r.raw) + '</pre></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function escape(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function resetForm() {
+  document.getElementById('result-card').classList.add('hidden');
+  document.getElementById('form-card').classList.remove('hidden');
+  uploadedFiles = [];
+  renderFileList();
+}
+
+function showAlert(msg) {
+  const el = document.getElementById('form-alert');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+// ══════════════════════════════════════════════════
+// JSONP helper
+// ══════════════════════════════════════════════════
+function jsonp(params) {
+  return new Promise((resolve, reject) => {
+    const cb = 'jsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      delete window[cb];
+      script.remove();
+      reject(new Error('Request timed out (45s)'));
+    }, 45000);
+
+    window[cb] = (data) => {
+      clearTimeout(timeout);
+      delete window[cb];
+      script.remove();
+      resolve(data);
+    };
+
+    const qs = Object.entries({ ...params, callback: cb })
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+
+    script.src = `${SCRIPT_URL}?${qs}`;
+    script.onerror = () => {
+      clearTimeout(timeout);
+      delete window[cb];
+      script.remove();
+      reject(new Error('Failed to reach server'));
+    };
+    document.body.appendChild(script);
+  });
+}
+</script>
+</body>
+</html>
