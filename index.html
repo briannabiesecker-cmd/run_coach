@@ -376,15 +376,14 @@ async function submitForm() {
   document.getElementById('loading-card').classList.remove('hidden');
 
   try {
-    const screenshotBase64 = uploadedFiles.map(f => f.base64).join(',,,');
-    const result = await jsonp({
+    const result = await postJson({
       action: 'coach',
       raceDistance: distance,
       raceDate: date,
       weeklyMileage: mileage,
       goalTime: goal,
       coachingStyle: style,
-      screenshotBase64: screenshotBase64
+      screenshots: uploadedFiles.map(f => f.base64)
     });
 
     if (result.error) throw new Error(result.error);
@@ -449,7 +448,22 @@ function showAlert(msg) {
 }
 
 // ══════════════════════════════════════════════════
-// JSONP helper
+// POST helper — for large payloads (screenshots).
+// Uses text/plain content-type to avoid CORS preflight.
+// ══════════════════════════════════════════════════
+async function postJson(body) {
+  const res = await fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════
+// JSONP helper (used for ping / lightweight calls)
 // ══════════════════════════════════════════════════
 function jsonp(params) {
   return new Promise((resolve, reject) => {

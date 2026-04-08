@@ -32,6 +32,27 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
+// POST endpoint for large payloads (screenshots).
+// Body is JSON sent as text/plain (avoids CORS preflight).
+function doPost(e) {
+  var result;
+  try {
+    var body = JSON.parse(e.postData.contents || '{}');
+    var action = body.action || '';
+    if (action === 'coach') {
+      result = coach(body);
+    } else {
+      result = { error: 'Unknown action: ' + action };
+    }
+  } catch (err) {
+    result = { error: err.message || String(err) };
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 // ──────────────────────────────────────────────────
 // Coach: send race goal + screenshots to Gemini
 // ──────────────────────────────────────────────────
@@ -53,7 +74,13 @@ function coach(params) {
   var weeklyMileage = params.weeklyMileage || '';
   var goalTime      = params.goalTime || '';
   var coachingStyle = params.coachingStyle || 'encouraging';
-  var screenshots   = (params.screenshotBase64 || '').split(',,,').filter(function(s) { return s.length > 0; });
+  // screenshots may arrive as an array (POST body) or comma-separated string (JSONP GET)
+  var screenshots;
+  if (Array.isArray(params.screenshots)) {
+    screenshots = params.screenshots;
+  } else {
+    screenshots = (params.screenshotBase64 || '').split(',,,').filter(function(s) { return s.length > 0; });
+  }
 
   if (!raceDate || !raceDistance) {
     return { error: 'raceDate and raceDistance are required.' };
