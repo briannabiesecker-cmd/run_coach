@@ -4134,6 +4134,13 @@ function submitManualWorkout() {
   renderDashboard();
 }
 
+function openSettingsMenu() {
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettingsMenu() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+
 function deleteLogEntry(date, type) {
   if (!confirm(`Delete this ${type} entry from ${date}?`)) return;
   if (!checkIns[date] || !checkIns[date][type]) return;
