@@ -199,6 +199,99 @@ function getOrCreateUserSheet(userName) {
   return sheet;
 }
 
+// ──────────────────────────────────────────────────
+// DIAGNOSTIC: run this from the Apps Script editor to verify cloud
+// storage is wired correctly. Pick "testCloudSync" from the function
+// dropdown, click Run, then check the execution log (View → Logs or
+// the bottom panel). It will tell you exactly what worked and what
+// didn't, with URLs you can click to inspect the resulting sheet.
+//
+// No version bump needed — running from the editor uses the latest
+// clasp-pushed code directly.
+function testCloudSync() {
+  var log = [];
+  var ok = function(msg) { log.push('✅ ' + msg); Logger.log('✅ ' + msg); };
+  var bad = function(msg) { log.push('❌ ' + msg); Logger.log('❌ ' + msg); };
+  var info = function(msg) { log.push('   ' + msg); Logger.log('   ' + msg); };
+
+  // 1. Folder lookup
+  try {
+    var folder = getOrCreateRunCoachFolder();
+    ok('Folder OK: ' + folder.getName());
+    info('Folder URL: ' + folder.getUrl());
+    info('Folder ID:  ' + folder.getId());
+  } catch (e) {
+    bad('Folder lookup failed: ' + e.message);
+    return log.join('\n');
+  }
+
+  // 2. Per-user sheet creation
+  var testUser = 'test_diagnostic';
+  var sheet;
+  try {
+    sheet = getOrCreateUserSheet(testUser);
+    ok('Sheet OK for user "' + testUser + '"');
+    info('Sheet URL: ' + sheet.getParent().getUrl());
+    info('Sheet ID:  ' + sheet.getParent().getId());
+  } catch (e) {
+    bad('Sheet creation failed: ' + e.message);
+    return log.join('\n');
+  }
+
+  // 3. Round-trip write → read
+  var samplePayload = {
+    test: true,
+    timestamp: new Date().toISOString(),
+    note: 'If you see this in your sheet, cloud sync is working.'
+  };
+  try {
+    var saveResult = saveUserData({ userName: testUser, payload: samplePayload });
+    if (saveResult.error) { bad('Save failed: ' + saveResult.error); return log.join('\n'); }
+    ok('Save round-trip succeeded');
+    info('Saved at: ' + saveResult.updatedAt);
+  } catch (e) {
+    bad('Save threw: ' + e.message);
+    return log.join('\n');
+  }
+
+  try {
+    var loadResult = loadUserData({ userName: testUser });
+    if (loadResult.error) { bad('Load failed: ' + loadResult.error); return log.join('\n'); }
+    if (!loadResult.payload || !loadResult.payload.test) {
+      bad('Load returned unexpected payload: ' + JSON.stringify(loadResult.payload));
+      return log.join('\n');
+    }
+    ok('Load round-trip succeeded — payload matches');
+    info('Loaded note: ' + loadResult.payload.note);
+  } catch (e) {
+    bad('Load threw: ' + e.message);
+    return log.join('\n');
+  }
+
+  // 4. Verify the sheet appears in the right folder
+  try {
+    var folder2 = getOrCreateRunCoachFolder();
+    var fileName = 'RunCoach - ' + testUser;
+    var matches = folder2.getFilesByName(fileName);
+    if (matches.hasNext()) {
+      ok('File "' + fileName + '" is in the RunCoach folder ✓');
+    } else {
+      bad('File "' + fileName + '" was NOT found in the RunCoach folder. Sheet was created elsewhere.');
+    }
+  } catch (e) {
+    bad('Folder verification failed: ' + e.message);
+  }
+
+  log.push('');
+  log.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  log.push('DONE. To clean up the test sheet:');
+  log.push('  1. Open the Sheet URL above');
+  log.push('  2. File → Move to trash');
+  log.push('  3. Project Settings → Script Properties → delete USER_SHEET_test_diagnostic');
+  log.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  return log.join('\n');
+}
+
 function loadUserData(body) {
   var userName = (body.userName || '').trim();
   if (!userName) return { error: 'userName is required' };
