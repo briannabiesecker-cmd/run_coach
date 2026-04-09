@@ -496,6 +496,13 @@
   .mp-bar-actual.over {
     background: #facc15;
   }
+  .mp-week.historical .mp-bar-actual {
+    background: #475569;
+    opacity: 0.7;
+  }
+  .mp-week.historical .mp-week-label {
+    color: var(--ink-faint);
+  }
   .mp-week.current .mp-bar-actual,
   .mp-week.current .mp-bar-planned {
     box-shadow: 0 0 0 1px var(--accent);
@@ -4506,14 +4513,23 @@ function renderHome() {
 
   // Quick stats
   const totalMiles = (plan.weeks || []).reduce((s, w) => s + (w.totalMiles || 0), 0);
-  const milesDone = (plan.weeks || []).slice(0, wkIdx).reduce((s, w) => s + (w.totalMiles || 0), 0);
+  // ACTUAL miles done — sum all 'done' check-ins (including historical/backfilled)
+  let actualDone = 0;
+  let actualRuns = 0;
+  Object.keys(checkIns).forEach(iso => {
+    const ci = checkIns[iso] && checkIns[iso].run;
+    if (ci && ci.status === 'done') {
+      actualDone += ci.distance || 0;
+      actualRuns++;
+    }
+  });
   const peakWeek = (plan.weeks || []).reduce((max, w) => (w.totalMiles > (max.totalMiles || 0) ? w : max), {});
 
   document.getElementById('quick-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${plan.weeks ? plan.weeks.length : 0}</div><div class="stat-label">Total Weeks</div></div>
-    <div class="stat-card"><div class="stat-value">${totalMiles}</div><div class="stat-label">Plan Miles</div><div class="stat-sub">${milesDone} done</div></div>
+    <div class="stat-card"><div class="stat-value">${actualRuns}</div><div class="stat-label">Runs Done</div><div class="stat-sub">all-time</div></div>
+    <div class="stat-card"><div class="stat-value">${Math.round(actualDone)}</div><div class="stat-label">Miles Done</div><div class="stat-sub">all-time</div></div>
+    <div class="stat-card"><div class="stat-value">${totalMiles}</div><div class="stat-label">Plan Miles</div><div class="stat-sub">${plan.weeks ? plan.weeks.length : 0} weeks</div></div>
     <div class="stat-card"><div class="stat-value">${peakWeek.totalMiles || 0}</div><div class="stat-label">Peak Week</div><div class="stat-sub">Wk ${peakWeek.week || '—'}</div></div>
-    <div class="stat-card"><div class="stat-value">${plan.phases ? plan.phases.length : 0}</div><div class="stat-label">Phases</div></div>
   `;
 }
 
@@ -4894,14 +4910,57 @@ function renderMileageProgressionChart() {
   const today = todayISO();
   const currentIdx = getCurrentWeekIndex();
 
-  // Compute actual miles per week — iterate ALL 7 calendar days, NOT just
+  // Find the earliest check-in date so we can prepend historical weeks
+  // (data from before planStartDate). This way backfilled runs show up.
+  let earliestCheckInISO = null;
+  Object.keys(checkIns).forEach(iso => {
+    if (checkIns[iso] && checkIns[iso].run && (!earliestCheckInISO || iso < earliestCheckInISO)) {
+      earliestCheckInISO = iso;
+    }
+  });
+
+  // Compute how many historical weeks to prepend
+  let historicalWeeks = [];
+  if (earliestCheckInISO && planStartDate && earliestCheckInISO < planStartDate) {
+    const earliest = new Date(earliestCheckInISO + 'T00:00:00');
+    const planStart = new Date(planStartDate + 'T00:00:00');
+    const daysBack = Math.ceil((planStart - earliest) / 86400000);
+    const numHistWeeks = Math.ceil(daysBack / 7);
+    for (let h = numHistWeeks; h > 0; h--) {
+      // This historical week starts (h*7) days before planStartDate
+      const weekStart = new Date(planStart);
+      weekStart.setDate(weekStart.getDate() - h * 7);
+      const weekStartISO = weekStart.toISOString().slice(0, 10);
+      let actual = 0;
+      for (let di = 0; di < 7; di++) {
+        const d = new Date(weekStart);
+        d.setDate(d.getDate() + di);
+        const iso = d.toISOString().slice(0, 10);
+        const ci = checkIns[iso] && checkIns[iso].run;
+        if (ci && ci.status === 'done') {
+          actual += ci.distance || 0;
+        }
+      }
+      historicalWeeks.push({
+        wkNum: '–' + h,
+        planned: 0,
+        actual,
+        isCurrent: false,
+        isPast: true,
+        isHistorical: true,
+        weekStartISO
+      });
+    }
+  }
+
+  // Compute actual miles per plan week — iterate ALL 7 calendar days, NOT just
   // planned non-rest days (so logged runs on rest days / substitutions count).
   let totalPlanned = 0;
   let totalActual = 0;
   let weeksWithData = 0;
   let onTrackWeeks = 0;
 
-  const data = weeks.map((w, wkIdx) => {
+  const planData = weeks.map((w, wkIdx) => {
     let actual = 0;
     if (planStartDate) {
       for (let di = 0; di < 7; di++) {
@@ -4925,23 +4984,41 @@ function renderMileageProgressionChart() {
     return { wkNum: w.week, planned, actual, isCurrent: wkIdx === currentIdx, isPast: wkIdx < currentIdx };
   });
 
-  const maxMi = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
+  // Combine historical + plan weeks for the chart
+  const data = historicalWeeks.concat(planData);
+
+  // Add historical actual miles to total
+  historicalWeeks.forEach(h => { totalActual += h.actual; });
+
+  // maxMi must consider both planned and historical actuals so historical bars
+  // don't get clipped if they're larger than the planned weeks
+  const histMax = historicalWeeks.length ? Math.max(...historicalWeeks.map(h => h.actual)) : 0;
+  const maxMi = Math.max(...weeks.map(w => w.totalMiles || 0), histMax, 1);
   const compliance = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
   const complianceClass = compliance >= 80 ? '' : compliance >= 50 ? 'warn' : 'bad';
 
-  // Bars
+  // Bars (historical weeks have no planned bar; plan weeks have both)
   const bars = data.map((d, i) => {
     const plannedH = Math.round((d.planned / maxMi) * 95);
     const actualH = Math.round((d.actual / maxMi) * 95);
     const overPlanned = d.actual > d.planned;
     const showLabel = i % 2 === 0 || i === data.length - 1;
+    const planIdx = i - historicalWeeks.length;
+    const onClick = !d.isHistorical && planIdx >= 0
+      ? `onclick="viewedWeekIdx=${planIdx};switchTab('plan');renderPlan();"`
+      : '';
+    const tooltip = d.isHistorical
+      ? `Pre-plan week: ${d.actual.toFixed(1)} mi`
+      : `Wk ${d.wkNum}: ${d.actual.toFixed(1)} of ${d.planned} mi`;
+    const plannedBar = d.isHistorical ? '' : `<div class="mp-bar-planned" style="height:${plannedH}px;"></div>`;
+    const histClass = d.isHistorical ? ' historical' : '';
     return `
-      <div class="mp-week${d.isCurrent ? ' current' : ''}" onclick="viewedWeekIdx=${i};switchTab('plan');renderPlan();" title="Wk ${d.wkNum}: ${d.actual.toFixed(1)} of ${d.planned} mi">
+      <div class="mp-week${d.isCurrent ? ' current' : ''}${histClass}" ${onClick} title="${tooltip}">
         <div class="mp-week-bars">
-          <div class="mp-bar-planned" style="height:${plannedH}px;"></div>
+          ${plannedBar}
           <div class="mp-bar-actual${overPlanned ? ' over' : ''}" style="height:${actualH}px;"></div>
         </div>
-        ${showLabel ? `<div class="mp-week-label">W${d.wkNum}</div>` : '<div class="mp-week-label"></div>'}
+        ${showLabel ? `<div class="mp-week-label">${escape(String(d.wkNum))}</div>` : '<div class="mp-week-label"></div>'}
       </div>`;
   }).join('');
 
