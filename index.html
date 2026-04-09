@@ -7054,7 +7054,25 @@ async function postJson(body) {
 // ════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════
+
+// Fire-and-forget GET to ?action=ping. Apps Script web apps idle after
+// ~5 minutes of no traffic, and the first request after idle waits 5-7
+// seconds for the runtime to spin up. Pinging on app boot warms the
+// script while the user is reading the consent screen / typing their
+// passcode, so by the time they reach the first real action it's hot.
+// No-op if it fails — pure optimization.
+function warmAppsScript() {
+  try {
+    if (typeof SCRIPT_URL !== 'string' || !SCRIPT_URL) return;
+    // Use a no-callback img-style fetch so this doesn't block init or
+    // touch the global state if it errors.
+    fetch(SCRIPT_URL + '?action=ping&callback=warmup', { method: 'GET' })
+      .catch(() => {}); // swallow all errors — best effort
+  } catch (e) { /* never let warmup break init */ }
+}
+
 function init() {
+  warmAppsScript();
   // Render the strength rows once so the empty-state shows on setup form
   renderStrengthRows();
   routeNext();
