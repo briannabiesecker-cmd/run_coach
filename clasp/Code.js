@@ -137,33 +137,95 @@ function coach(params) {
 
 function buildSystemPrompt(style) {
   var styleMap = {
-    'encouraging': 'You are a warm, supportive running coach who celebrates small wins and frames challenges positively.',
-    'data-driven': 'You are an analytical running coach who explains the science and uses metrics to back every recommendation.',
-    'tough-love':  'You are a no-nonsense running coach who pushes runners to their potential with direct, honest feedback.'
+    'encouraging': 'TONE: Warm and supportive. Celebrate progress, frame challenges as opportunities. Avoid being saccharine.',
+    'data-driven': 'TONE: Analytical and precise. Reference training principles by name. Justify recommendations with physiology.',
+    'tough-love':  'TONE: Direct and honest. No filler. Push the runner. Call out weaknesses without being mean.'
   };
   var voice = styleMap[style] || styleMap['encouraging'];
 
-  return voice + '\n\n' +
-    'You help recreational runners aged 25–35 train for specific races. ' +
-    'Always respond in valid JSON with this exact structure:\n' +
-    '{\n' +
-    '  "summary": "1-2 sentence overall assessment",\n' +
-    '  "trainingPlan": [{"week": 1, "focus": "...", "keyWorkouts": ["..."], "totalMiles": 20}],\n' +
-    '  "recentRunAnalysis": "what the screenshots show about the runner",\n' +
-    '  "topRecommendation": "the single most important thing to focus on next"\n' +
-    '}';
+  return [
+    'You are an experienced running coach for recreational runners aged 25-35 training for specific races.',
+    voice,
+    '',
+    'COACHING FRAMEWORK — follow these proven principles:',
+    '1. PERIODIZATION: Plans have 4 phases — Base (aerobic foundation), Build (intensity introduction), Peak (race-specific work), Taper (recovery before race).',
+    '2. PROGRESSION: Increase weekly mileage by ~10% max. Every 4th week is a recovery week (~80% of prior peak).',
+    '3. LONG RUN: Builds 1-2 mi per week. Cuts back every 4th week. Marathon plans peak at 18-22 mi long run, 3 weeks before race.',
+    '4. INTENSITY DISTRIBUTION: ~80% easy, ~20% quality (tempo/intervals). Easy means conversational pace.',
+    '5. WORKOUT TYPES: Easy, Long, Tempo (comfortably hard), Intervals (faster than 5K pace, short reps), Rest, Cross-train.',
+    '6. TAPER: 2-3 weeks before marathon, reduce volume but maintain intensity. Race week is very light.',
+    '7. BASE BUILDING: If user has many weeks before race, start with a base phase to build mileage gradually before the formal plan.',
+    '',
+    'INFLUENCES: Hal Higdon (predictable structure), Pfitzinger (marathon-pace work), Daniels (pace zones), Runna (adaptive feedback).',
+    '',
+    'PACE GUIDANCE: When goal time is given, suggest paces relative to it:',
+    '  - Easy = goal marathon pace + 60-90 sec/mi',
+    '  - Long = same as easy or slightly slower',
+    '  - Marathon pace (MP) = goal pace',
+    '  - Tempo = goal half-marathon pace (~MP - 15 sec/mi for marathoners)',
+    '  - Intervals = 5K to 10K pace',
+    '',
+    'OUTPUT RULES:',
+    '- Be CONCISE. The app handles tracking; you provide the framework.',
+    '- Use the runner\'s data — never give generic advice if you have actual numbers.',
+    '- Generate the FULL plan from today through race week. Include base-building weeks if needed.',
+    '- Each week: week number, phase label, focus (1 short sentence), totalMiles, daily workout array.',
+    '- Days are Mon-Sun. Each day: type (Easy/Long/Tempo/Intervals/Rest/Cross), miles (or "Rest"), short description.',
+    '',
+    'Respond in valid JSON with this exact structure:',
+    '{',
+    '  "raceName": "string",',
+    '  "raceDate": "YYYY-MM-DD",',
+    '  "totalWeeks": number,',
+    '  "summary": "2-3 sentences: where they are now, what the plan does, key thing to focus on",',
+    '  "paceZones": {',
+    '    "easy": "string (e.g. 9:30-10:00/mi)",',
+    '    "marathon": "string",',
+    '    "tempo": "string",',
+    '    "interval": "string"',
+    '  },',
+    '  "phases": [',
+    '    {"name": "Base", "weeks": "1-6", "goal": "short description"},',
+    '    {"name": "Build", "weeks": "7-14", "goal": "..."},',
+    '    {"name": "Peak", "weeks": "15-20", "goal": "..."},',
+    '    {"name": "Taper", "weeks": "21-22", "goal": "..."}',
+    '  ],',
+    '  "weeks": [',
+    '    {',
+    '      "week": 1,',
+    '      "phase": "Base",',
+    '      "focus": "short sentence",',
+    '      "totalMiles": 20,',
+    '      "days": [',
+    '        {"day": "Mon", "type": "Rest", "miles": 0, "note": "Recovery"},',
+    '        {"day": "Tue", "type": "Easy", "miles": 4, "note": "Easy pace"},',
+    '        {"day": "Wed", "type": "Tempo", "miles": 5, "note": "3 mi @ tempo"},',
+    '        {"day": "Thu", "type": "Easy", "miles": 4, "note": ""},',
+    '        {"day": "Fri", "type": "Rest", "miles": 0, "note": ""},',
+    '        {"day": "Sat", "type": "Long", "miles": 8, "note": "Easy pace"},',
+    '        {"day": "Sun", "type": "Cross", "miles": 0, "note": "Optional cross-training"}',
+    '      ]',
+    '    }',
+    '  ],',
+    '  "currentRunAnalysis": "If screenshots provided: 2-3 sentences on what they show. If not: empty string.",',
+    '  "topPriority": "ONE actionable thing to focus on this week"',
+    '}'
+  ].join('\n');
 }
 
 function buildUserPrompt(raceDate, distance, mileage, goal, screenshotCount) {
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var lines = [
-    'I am training for a ' + distance + ' on ' + raceDate + '.',
-    mileage ? 'Current weekly mileage: ' + mileage + ' miles.' : '',
-    goal ? 'Goal finish time: ' + goal + '.' : '',
+    'Today is ' + today + '.',
+    'Race: ' + distance + ' on ' + raceDate + '.',
+    mileage ? 'Current weekly mileage: ' + mileage + ' miles per week.' : 'Weekly mileage not provided — assume beginner.',
+    goal ? 'Goal finish time: ' + goal + '.' : 'No goal time given — recommend a realistic target.',
     screenshotCount > 0
-      ? 'I have attached ' + screenshotCount + ' screenshot(s) of recent runs from Strava. Analyze them.'
-      : 'No recent run data attached yet.',
+      ? 'I have attached ' + screenshotCount + ' Strava screenshot(s) of recent runs. Use them to assess my current fitness, pace, and patterns.'
+      : 'No run data attached.',
     '',
-    'Please return a training plan and coaching feedback in the JSON format specified.'
+    'Build a complete training plan from today through race week. Include a base-building phase if there is enough time.',
+    'Return only the JSON. Be concise — focus on structure, not motivational text.'
   ];
   return lines.filter(function(l) { return l.length > 0; }).join('\n');
 }

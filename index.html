@@ -2,131 +2,540 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Run Coach</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
   :root {
-    --bg: #F5F7FA;
-    --ink: #0F172A;
-    --ink-mid: #475569;
-    --ink-light: #94A3B8;
-    --line: #E2E8F0;
-    --accent: #F97316;       /* orange — energetic */
-    --accent-dark: #EA580C;
-    --accent-bg: #FFF7ED;
-    --success: #10B981;
-    --success-bg: #ECFDF5;
-    --danger: #EF4444;
-    --radius: 12px;
-    --radius-lg: 18px;
-    --shadow: 0 2px 8px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.04);
+    --bg: #070f1e;
+    --bg-elev: rgba(255,255,255,0.03);
+    --bg-elev-2: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.12);
+    --ink: #f1f5f9;
+    --ink-mid: #94a3b8;
+    --ink-light: #64748b;
+    --ink-dim: #475569;
+    --ink-faint: #334155;
+    --accent: #00C896;
+    --accent-bg: rgba(0,200,150,0.12);
+    --accent-border: rgba(0,200,150,0.3);
+    --accent-glow: rgba(0,200,150,0.15);
+
+    --phase-base: #00C896;
+    --phase-build: #3b82f6;
+    --phase-peak: #f97316;
+    --phase-taper: #a855f7;
+    --phase-race: #ef4444;
+
+    --type-easy:      #00C896;
+    --type-long:      #3b82f6;
+    --type-tempo:     #facc15;
+    --type-intervals: #ef4444;
+    --type-rest:      #475569;
+    --type-cross:     #a855f7;
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg);
     color: var(--ink);
     min-height: 100vh;
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
-  .container {
-    max-width: 720px;
+  .app {
+    max-width: 430px;
     margin: 0 auto;
-    padding: 2rem 1.25rem 4rem;
+    min-height: 100vh;
+    padding-bottom: 90px;
+    position: relative;
   }
 
-  header {
-    text-align: center;
-    margin-bottom: 2rem;
+  /* ─── Top bar ──────────────────────────────────── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 12px;
   }
-  header h1 {
-    font-size: 28px;
+  .brand-tag {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .brand-greeting {
+    font-size: 18px;
     font-weight: 800;
-    letter-spacing: -0.5px;
+    color: var(--ink);
+    line-height: 1.1;
+    margin-top: 2px;
   }
-  header h1 span { color: var(--accent); }
-  header p {
-    font-size: 15px;
+  .status-pill {
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ─── View management ──────────────────────────── */
+  .view { padding: 0 16px 24px; }
+  .hidden { display: none !important; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* ─── Section labels ───────────────────────────── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    margin-top: 6px;
+  }
+
+  /* ─── Cards ────────────────────────────────────── */
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+
+  /* ─── Hero card (Home) ─────────────────────────── */
+  .hero {
+    background: linear-gradient(135deg, #0f2744 0%, #0a1628 60%, #041122 100%);
+    border: 1px solid rgba(0,200,150,0.2);
+    border-radius: 20px;
+    padding: 22px 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .hero-tag {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-top: 4px;
+    line-height: 1.2;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-workout {
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--accent);
+    margin-top: 6px;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-meta {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-top: 6px;
+    line-height: 1.6;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ─── Day strip ────────────────────────────────── */
+  .day-strip {
+    display: flex;
+    gap: 6px;
+    margin-top: 16px;
+    position: relative;
+    z-index: 1;
+  }
+  .day-cell {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 4px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .day-cell.today {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .day-cell.done {
+    background: rgba(0,200,150,0.15);
+  }
+  .day-cell .day-letter {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--ink-mid);
+    letter-spacing: 1px;
+  }
+  .day-cell.today .day-letter { color: #0a1628; }
+  .day-cell .day-icon {
+    font-size: 16px;
+    margin-top: 4px;
+  }
+  .day-cell .day-sub {
+    font-size: 9px;
+    color: var(--ink-light);
+    margin-top: 3px;
+  }
+  .day-cell.today .day-sub { color: #0a1628; }
+
+  /* ─── Race countdown ───────────────────────────── */
+  .race-card {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .race-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .race-name { font-weight: 700; color: var(--ink); font-size: 13px; }
+  .race-meta { font-size: 11px; color: var(--ink-light); margin-top: 2px; }
+  .race-days {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+    text-align: right;
+  }
+  .race-days-sub {
+    font-size: 10px;
+    color: var(--ink-light);
+    text-align: right;
+  }
+  .race-progress {
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .race-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 1s ease;
+  }
+
+  /* ─── Quick stats ──────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--ink-mid);
+    margin-top: 2px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .stat-sub {
+    font-size: 9px;
+    color: var(--ink-dim);
+    margin-top: 1px;
+  }
+
+  /* ─── Mileage chart (Plan) ─────────────────────── */
+  .chart-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 12px;
+    margin-bottom: 16px;
+  }
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 80px;
+  }
+  .chart-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    transition: height 0.3s ease;
+    min-height: 2px;
+  }
+  .chart-bar.current {
+    border: 1px solid var(--accent);
+  }
+  .chart-legend {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+  }
+  .legend-label {
+    font-size: 10px;
+    color: var(--ink-light);
+  }
+
+  /* ─── Week cards (Plan) ────────────────────────── */
+  .week-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .week-card.current {
+    background: rgba(0,200,150,0.08);
+    border-color: rgba(0,200,150,0.4);
+  }
+  .week-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .week-num {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--ink-light);
+    letter-spacing: 1px;
+  }
+  .week-card.current .week-num { color: var(--accent); }
+  .week-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-left: 6px;
+  }
+  .week-pill.now {
+    background: rgba(0,200,150,0.2);
+    color: var(--accent);
+  }
+  .week-focus {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-top: 3px;
+  }
+  .week-mi-big {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ink);
+    text-align: right;
+  }
+  .week-mi-label {
+    font-size: 10px;
+    color: var(--ink-dim);
+    text-align: right;
+  }
+  .day-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .day-mini {
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 6px 2px;
+    text-align: center;
+  }
+  .day-mini .label {
+    font-size: 9px;
+    color: var(--ink-dim);
+    font-weight: 700;
+  }
+  .day-mini .val {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+  .day-mini.rest .val { color: var(--ink-faint); }
+
+  /* ─── Pace zones ───────────────────────────────── */
+  .pace-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .pace-card {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .pace-card .label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ink-mid);
+  }
+  .pace-card .value {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+
+  /* ─── Phase rows ───────────────────────────────── */
+  .phase-row {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .phase-row.current {
+    background: rgba(0,200,150,0.06);
+  }
+  .phase-row .name {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .phase-row .weeks {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 2px;
+  }
+  .phase-row .goal {
+    font-size: 12px;
     color: var(--ink-mid);
     margin-top: 4px;
   }
 
-  .card {
-    background: white;
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    box-shadow: var(--shadow);
-    margin-bottom: 1.25rem;
+  /* ─── Coach's notes ────────────────────────────── */
+  .note-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .note-icon { font-size: 16px; }
+  .note-text { font-size: 12px; color: var(--ink-mid); line-height: 1.5; }
+
+  /* ─── Form (Setup) ─────────────────────────────── */
+  .setup-hero {
+    text-align: center;
+    padding: 24px 0 20px;
+  }
+  .setup-icon { font-size: 48px; }
+  .setup-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-top: 8px;
+  }
+  .setup-sub {
+    font-size: 13px;
+    color: var(--ink-mid);
+    margin-top: 4px;
   }
 
-  .card h2 {
-    font-size: 18px;
-    font-weight: 700;
-    margin-bottom: 1rem;
-  }
-
-  .field { margin-bottom: 1rem; }
+  .field { margin-bottom: 14px; }
   .field label {
     display: block;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--ink);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     margin-bottom: 6px;
   }
-  .field .hint {
-    font-size: 12px;
-    color: var(--ink-light);
-    margin-bottom: 6px;
-  }
-
   input[type="date"], input[type="text"], input[type="number"], select {
     width: 100%;
     font-family: inherit;
-    font-size: 16px;
-    padding: 10px 14px;
-    border: 1.5px solid var(--line);
-    border-radius: var(--radius);
-    background: white;
+    font-size: 15px;
+    padding: 12px 14px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
     color: var(--ink);
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 0.15s;
   }
+  input::placeholder { color: var(--ink-faint); }
   input:focus, select:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(249,115,22,0.12);
   }
+  select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  @media (max-width: 480px) {
-    .row { grid-template-columns: 1fr; }
-  }
-
+  /* File upload */
   .file-drop {
-    border: 2px dashed var(--line);
-    border-radius: var(--radius);
-    padding: 1.5rem;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 12px;
+    padding: 18px;
     text-align: center;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
+    background: var(--bg-elev);
   }
   .file-drop:hover {
     border-color: var(--accent);
     background: var(--accent-bg);
   }
   .file-drop input { display: none; }
-  .file-drop .icon { font-size: 32px; }
+  .file-drop .icon { font-size: 28px; }
   .file-drop .label {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--ink-mid);
     margin-top: 4px;
   }
@@ -134,256 +543,161 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 10px;
   }
   .file-thumb {
-    width: 60px; height: 60px;
+    width: 56px; height: 56px;
     border-radius: 8px;
     object-fit: cover;
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
   }
 
-  button.primary {
+  /* Buttons */
+  .btn-primary {
     width: 100%;
     background: var(--accent);
-    color: white;
+    color: #0a1628;
     border: none;
     font-family: inherit;
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 800;
     padding: 14px;
-    border-radius: var(--radius);
+    border-radius: 12px;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: opacity 0.15s;
+    letter-spacing: 0.3px;
   }
-  button.primary:hover { background: var(--accent-dark); }
-  button.primary:disabled {
-    background: var(--ink-light);
-    cursor: not-allowed;
-  }
-
-  .alert {
-    padding: 12px 16px;
-    border-radius: var(--radius);
-    font-size: 14px;
-    margin-bottom: 1rem;
-  }
-  .alert.error { background: #FEE2E2; color: var(--danger); }
-  .alert.success { background: var(--success-bg); color: var(--success); }
-  .hidden { display: none; }
-
-  .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost {
+    width: 100%;
+    background: transparent;
     color: var(--ink-mid);
-    padding: 2rem 0;
+    border: 1px solid var(--border);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 11px;
+    border-radius: 12px;
+    cursor: pointer;
+    margin-top: 8px;
   }
-  .spinner {
-    width: 20px; height: 20px;
-    border: 3px solid var(--line);
+  .btn-ghost:hover { border-color: var(--ink-mid); color: var(--ink); }
+
+  /* Alerts */
+  .alert {
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .alert.error { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+
+  /* Loading */
+  .loading-state {
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .loading-state .spinner {
+    width: 36px; height: 36px;
+    border: 4px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Result display */
-  .result-section {
-    margin-top: 1rem;
-  }
-  .result-section h3 {
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--ink-light);
-    margin-bottom: 8px;
-  }
-  .result-summary {
-    font-size: 16px;
-    color: var(--ink);
-    line-height: 1.6;
-  }
-  .week-row {
-    background: var(--bg);
-    border-radius: var(--radius);
-    padding: 12px 14px;
-    margin-bottom: 8px;
-  }
-  .week-row .week-label {
-    font-weight: 700;
-    color: var(--accent-dark);
+  .loading-state .label {
     font-size: 14px;
-  }
-  .week-row .week-focus {
-    font-size: 14px;
-    color: var(--ink);
-    margin-top: 2px;
-  }
-  .week-row .week-workouts {
-    font-size: 13px;
     color: var(--ink-mid);
+  }
+  .loading-state .sub {
+    font-size: 11px;
+    color: var(--ink-dim);
     margin-top: 4px;
   }
-  .top-rec {
-    background: var(--accent-bg);
-    border-left: 4px solid var(--accent);
-    padding: 14px 16px;
-    border-radius: var(--radius);
-    font-size: 15px;
-    color: var(--ink);
-  }
 
-  /* Plan header */
-  .plan-header {
-    text-align: center;
-    margin-bottom: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--line);
+  /* ─── Bottom nav ───────────────────────────────── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    background: rgba(7,15,30,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 0 16px;
+    z-index: 100;
   }
-  .plan-race { font-size: 22px; font-weight: 800; color: var(--ink); }
-  .plan-date { font-size: 14px; color: var(--ink-mid); margin-top: 2px; }
-  .plan-weeks {
-    display: inline-block;
-    background: var(--accent-bg);
-    color: var(--accent-dark);
-    font-size: 12px;
+  .nav-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 0;
+    color: var(--ink-faint);
+    font-family: inherit;
+    transition: color 0.2s;
+  }
+  .nav-btn .nav-icon { font-size: 18px; }
+  .nav-btn .nav-label {
+    font-size: 10px;
     font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 12px;
-    margin-top: 8px;
+    letter-spacing: 0.5px;
   }
-
-  /* Pace zones */
-  .pace-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-  .pace-card {
-    background: var(--bg);
-    padding: 10px 12px;
-    border-radius: var(--radius);
-  }
-  .pace-label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--ink-light);
-  }
-  .pace-value {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--ink);
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn .nav-indicator {
+    width: 16px;
+    height: 2px;
+    background: transparent;
+    border-radius: 2px;
     margin-top: 2px;
   }
+  .nav-btn.active .nav-indicator { background: var(--accent); }
 
-  /* Phase rows */
-  .phase-row {
-    display: grid;
-    grid-template-columns: 80px 80px 1fr;
-    gap: 12px;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line);
-    font-size: 14px;
-  }
-  .phase-row:last-child { border-bottom: none; }
-  .phase-name { font-weight: 700; color: var(--accent-dark); }
-  .phase-weeks { color: var(--ink-mid); font-size: 13px; }
-  .phase-goal { color: var(--ink); }
-
-  /* Weekly schedule (collapsible) */
-  .week-details {
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    margin-bottom: 6px;
-    background: white;
-  }
-  .week-details summary {
-    cursor: pointer;
-    padding: 10px 14px;
-    display: grid;
-    grid-template-columns: 60px 70px 60px 1fr;
-    gap: 10px;
-    align-items: center;
-    font-size: 14px;
-  }
-  .week-details summary::-webkit-details-marker { display: none; }
-  .week-details summary::marker { display: none; }
-  .week-num { font-weight: 700; color: var(--ink); }
-  .week-phase {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--ink-light);
-  }
-  .week-mi {
-    font-weight: 700;
-    color: var(--accent-dark);
-    text-align: right;
-  }
-  .week-focus-text { color: var(--ink-mid); font-size: 13px; }
-  @media (max-width: 600px) {
-    .week-details summary { grid-template-columns: 50px 1fr 60px; }
-    .week-focus-text { grid-column: 1 / -1; font-size: 12px; }
-  }
-
-  .day-grid {
-    border-top: 1px solid var(--line);
-    padding: 10px 14px;
-  }
-  .day-row {
-    display: grid;
-    grid-template-columns: 50px 80px 60px 1fr;
-    gap: 10px;
-    padding: 6px 0;
-    font-size: 13px;
-    align-items: center;
-  }
-  .day-name { font-weight: 700; color: var(--ink); }
-  .day-type {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 10px;
-    display: inline-block;
+  /* Empty states */
+  .empty {
     text-align: center;
+    padding: 30px 20px;
+    color: var(--ink-light);
+    font-size: 13px;
   }
-  .day-easy .day-type     { background: #DCFCE7; color: #166534; }
-  .day-long .day-type     { background: #DBEAFE; color: #1E40AF; }
-  .day-tempo .day-type    { background: #FEF3C7; color: #92400E; }
-  .day-intervals .day-type{ background: #FCE7F3; color: #9F1239; }
-  .day-rest .day-type     { background: var(--line); color: var(--ink-light); }
-  .day-cross .day-type    { background: #E0E7FF; color: #3730A3; }
-  .day-miles { color: var(--ink-mid); font-size: 12px; text-align: right; }
-  .day-note { color: var(--ink-light); font-size: 12px; }
-  @media (max-width: 600px) {
-    .day-row { grid-template-columns: 40px 70px 50px 1fr; }
-  }
+  .empty .icon { font-size: 32px; display: block; margin-bottom: 8px; }
 </style>
 </head>
 <body>
-<div class="container">
+<div class="app">
 
-  <header>
-    <h1>Run <span>Coach</span></h1>
-    <p>Personalized training plans and AI coaching feedback</p>
-  </header>
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div>
+      <div class="brand-tag">Run Coach</div>
+      <div class="brand-greeting" id="greeting">Hey runner 👋</div>
+    </div>
+    <div class="status-pill" id="status-pill">Setup</div>
+  </div>
 
-  <!-- Form -->
-  <div class="card" id="form-card">
-    <h2>Tell us about your race</h2>
+  <!-- ═════════ SETUP VIEW ═════════ -->
+  <div id="view-setup" class="view">
+    <div class="setup-hero">
+      <div class="setup-icon">🏃‍♀️</div>
+      <div class="setup-title">Build your training plan</div>
+      <div class="setup-sub">Tell us about your race</div>
+    </div>
 
     <div id="form-alert" class="alert error hidden"></div>
 
     <div class="row">
       <div class="field">
-        <label for="race-distance">Race distance</label>
+        <label>Race distance</label>
         <select id="race-distance">
           <option value="">Choose…</option>
           <option value="5K">5K</option>
@@ -393,123 +707,318 @@
         </select>
       </div>
       <div class="field">
-        <label for="race-date">Race date</label>
+        <label>Race date</label>
         <input type="date" id="race-date" />
       </div>
     </div>
 
+    <div class="field">
+      <label>Race name (optional)</label>
+      <input type="text" id="race-name" placeholder="e.g. Richmond Marathon" />
+    </div>
+
     <div class="row">
       <div class="field">
-        <label for="weekly-mileage">Current weekly miles</label>
-        <input type="number" id="weekly-mileage" min="0" max="200" placeholder="e.g. 15" />
+        <label>Current weekly miles</label>
+        <input type="number" id="weekly-mileage" min="0" max="200" placeholder="15" />
       </div>
       <div class="field">
-        <label for="goal-time">Goal finish time</label>
-        <input type="text" id="goal-time" placeholder="e.g. 50:00" />
+        <label>Goal finish time</label>
+        <input type="text" id="goal-time" placeholder="4:30:00" />
       </div>
     </div>
 
     <div class="field">
-      <label for="coaching-style">Coaching style</label>
+      <label>Coaching style</label>
       <select id="coaching-style">
         <option value="encouraging">Encouraging — supportive and warm</option>
-        <option value="data-driven">Data-driven — analytical and metric-focused</option>
-        <option value="tough-love">Tough love — direct and pushy</option>
+        <option value="data-driven">Data-driven — analytical</option>
+        <option value="tough-love">Tough love — direct</option>
       </select>
     </div>
 
     <div class="field">
-      <label>Upload recent Strava run screenshots</label>
-      <div class="hint">Optional but recommended. Up to 3 screenshots.</div>
+      <label>Recent Strava screenshots (optional)</label>
       <label class="file-drop" for="screenshot-input">
         <div class="icon">📷</div>
-        <div class="label">Tap to upload screenshots</div>
+        <div class="label">Tap to upload — up to 3</div>
         <input type="file" id="screenshot-input" accept="image/*" multiple />
       </label>
       <div class="file-list" id="file-list"></div>
     </div>
 
-    <button class="primary" id="submit-btn" onclick="submitForm()">Get my training plan</button>
+    <button class="btn-primary" id="submit-btn" onclick="submitForm()">Build my plan</button>
   </div>
 
-  <!-- Loading -->
-  <div class="card hidden" id="loading-card">
-    <div class="loading"><div class="spinner"></div>Analyzing your runs and building your plan…</div>
+  <!-- ═════════ LOADING VIEW ═════════ -->
+  <div id="view-loading" class="view hidden">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <div class="label">Building your training plan…</div>
+      <div class="sub">Analyzing your runs · 10–20 seconds</div>
+    </div>
   </div>
 
-  <!-- Result -->
-  <div class="card hidden" id="result-card">
-    <h2>Your Training Plan</h2>
-    <div id="result-content"></div>
-    <button class="primary" style="margin-top:1rem;background:var(--ink-light);" onclick="resetForm()">Start over</button>
+  <!-- ═════════ DASHBOARD VIEWS ═════════ -->
+  <div id="view-dashboard" class="view hidden">
+
+    <!-- ─── HOME TAB ─── -->
+    <div id="tab-home" class="tab active">
+      <!-- Hero card with today's workout -->
+      <div class="hero" id="hero-card">
+        <div class="hero-tag" id="hero-tag">Loading</div>
+        <div class="hero-title">Today's Workout</div>
+        <div class="hero-workout" id="hero-workout">—</div>
+        <div class="hero-meta" id="hero-meta">—</div>
+        <div class="day-strip" id="day-strip"></div>
+      </div>
+
+      <div class="section-label">Race Countdown</div>
+      <div id="race-countdowns"></div>
+
+      <div class="section-label">Quick Stats</div>
+      <div class="stat-grid" id="quick-stats"></div>
+
+      <button class="btn-ghost" onclick="resetPlan()" style="margin-top:20px;">Start a new plan</button>
+    </div>
+
+    <!-- ─── PLAN TAB ─── -->
+    <div id="tab-plan" class="tab">
+      <div id="plan-summary"></div>
+      <div class="section-label">Mileage Build</div>
+      <div class="chart-card">
+        <div class="chart-bars" id="chart-bars"></div>
+        <div class="chart-legend" id="chart-legend"></div>
+      </div>
+      <div class="section-label">Current + Next Weeks</div>
+      <div id="week-list"></div>
+    </div>
+
+    <!-- ─── LOG TAB ─── -->
+    <div id="tab-log" class="tab">
+      <div class="section-label">Today's Focus</div>
+      <div class="card" id="top-priority-card"></div>
+
+      <div class="section-label">Run Analysis</div>
+      <div class="card" id="run-analysis-card"></div>
+
+      <div class="section-label">Recent Uploads</div>
+      <div id="upload-list" class="empty">
+        <span class="icon">📸</span>
+        Upload Strava screenshots when you start a new plan to get analysis here.
+      </div>
+    </div>
+
+    <!-- ─── PERFORMANCE TAB ─── -->
+    <div id="tab-performance" class="tab">
+      <div class="section-label">Pace Zones</div>
+      <div class="pace-grid" id="pace-zones"></div>
+
+      <div class="section-label" style="margin-top:16px;">Plan Phases</div>
+      <div id="phase-list"></div>
+
+      <div class="section-label" style="margin-top:16px;">Coach's Notes</div>
+      <div id="coach-notes"></div>
+    </div>
+
   </div>
 
 </div>
 
+<!-- Bottom nav -->
+<div id="bottom-nav" class="bottom-nav hidden">
+  <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">Home</span>
+    <span class="nav-indicator"></span>
+  </button>
+  <button class="nav-btn" data-tab="plan" onclick="switchTab('plan')">
+    <span class="nav-icon">📅</span>
+    <span class="nav-label">Plan</span>
+    <span class="nav-indicator"></span>
+  </button>
+  <button class="nav-btn" data-tab="log" onclick="switchTab('log')">
+    <span class="nav-icon">📓</span>
+    <span class="nav-label">Log</span>
+    <span class="nav-indicator"></span>
+  </button>
+  <button class="nav-btn" data-tab="performance" onclick="switchTab('performance')">
+    <span class="nav-icon">📊</span>
+    <span class="nav-label">Stats</span>
+    <span class="nav-indicator"></span>
+  </button>
+</div>
+
 <script>
-// ══════════════════════════════════════════════════
-// CONFIG — set after deploying Apps Script
-// ══════════════════════════════════════════════════
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQ4eUheeyTtZWlET0IhZBYbr98Pv6_dFHYsz-xDICEvh44CikuDHXebvyIOIY83FnGKg/exec'; // paste your Apps Script web app URL here
+// ════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQ4eUheeyTtZWlET0IhZBYbr98Pv6_dFHYsz-xDICEvh44CikuDHXebvyIOIY83FnGKg/exec';
+const STORAGE_KEY = 'runCoachPlan_v1';
 
-// ══════════════════════════════════════════════════
-// File upload handling
-// ══════════════════════════════════════════════════
-let uploadedFiles = []; // [{ name, base64 }]
+const PHASE_COLORS = {
+  'Base': '#00C896',
+  'Build': '#3b82f6',
+  'Bridge': '#3b82f6',
+  'Peak': '#f97316',
+  'Taper': '#a855f7',
+  'Race': '#ef4444',
+};
 
+const TYPE_ICONS = {
+  'Easy': '🟢',
+  'Long': '🛣️',
+  'Tempo': '⚡',
+  'Intervals': '🔥',
+  'Rest': '💤',
+  'Cross': '🧘',
+};
+
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+let plan = null;          // saved plan from AI
+let planStartDate = null; // ISO date string when plan was generated
+let uploadedFiles = [];   // [{ name, base64 }]
+
+// ════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════
+function escape(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function todayISO() {
+  const d = new Date(); d.setHours(0,0,0,0);
+  return d.toISOString().slice(0,10);
+}
+
+function daysBetween(a, b) {
+  const d1 = new Date(a + 'T00:00:00');
+  const d2 = new Date(b + 'T00:00:00');
+  return Math.round((d2 - d1) / 86400000);
+}
+
+function getCurrentWeekIndex() {
+  if (!plan || !planStartDate) return 0;
+  const days = daysBetween(planStartDate, todayISO());
+  return Math.max(0, Math.floor(days / 7));
+}
+
+function getCurrentDayIndex() {
+  // Mon=0..Sun=6
+  const d = new Date();
+  return (d.getDay() + 6) % 7;
+}
+
+function getPhaseColor(phaseName) {
+  return PHASE_COLORS[phaseName] || '#00C896';
+}
+
+function showView(name) {
+  ['setup', 'loading', 'dashboard'].forEach(v => {
+    document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
+  });
+  document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
+}
+
+function switchTab(tab) {
+  ['home', 'plan', 'log', 'performance'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+}
+
+// ════════════════════════════════════════════════════
+// PERSISTENCE
+// ════════════════════════════════════════════════════
+function savePlan(p) {
+  const payload = { plan: p, planStartDate: todayISO(), savedAt: new Date().toISOString() };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  plan = p;
+  planStartDate = payload.planStartDate;
+}
+
+function loadPlan() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    plan = data.plan;
+    planStartDate = data.planStartDate;
+    return true;
+  } catch(e) { return false; }
+}
+
+function resetPlan() {
+  if (!confirm('Start a new plan? This will erase your current plan.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  plan = null;
+  planStartDate = null;
+  uploadedFiles = [];
+  document.getElementById('file-list').innerHTML = '';
+  showView('setup');
+  document.getElementById('status-pill').textContent = 'Setup';
+}
+
+// ════════════════════════════════════════════════════
+// FILE UPLOAD
+// ════════════════════════════════════════════════════
 document.getElementById('screenshot-input').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files).slice(0, 3);
   uploadedFiles = [];
-  for (const file of files) {
-    const base64 = await fileToBase64(file);
-    uploadedFiles.push({ name: file.name, base64 });
+  for (const f of files) {
+    uploadedFiles.push({ name: f.name, base64: await fileToBase64(f) });
   }
   renderFileList();
 });
 
 function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]); // strip "data:image/...;base64,"
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
   });
 }
 
 function renderFileList() {
-  const list = document.getElementById('file-list');
-  list.innerHTML = uploadedFiles.map(f =>
-    `<img class="file-thumb" src="data:image/png;base64,${f.base64}" alt="${f.name}" />`
+  const el = document.getElementById('file-list');
+  el.innerHTML = uploadedFiles.map(f =>
+    `<img class="file-thumb" src="data:image/png;base64,${f.base64}" />`
   ).join('');
 }
 
-// ══════════════════════════════════════════════════
-// Submit form
-// ══════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// SUBMIT FORM
+// ════════════════════════════════════════════════════
 async function submitForm() {
   const distance = document.getElementById('race-distance').value;
   const date     = document.getElementById('race-date').value;
+  const raceName = document.getElementById('race-name').value;
   const mileage  = document.getElementById('weekly-mileage').value;
   const goal     = document.getElementById('goal-time').value;
   const style    = document.getElementById('coaching-style').value;
 
   if (!distance || !date) {
-    showAlert('Please choose a race distance and date.');
+    showFormAlert('Please choose a race distance and date.');
     return;
   }
   if (!SCRIPT_URL) {
-    showAlert('SCRIPT_URL is not set. Deploy the Apps Script and paste the URL into index.html.');
+    showFormAlert('Server URL not configured.');
     return;
   }
 
-  document.getElementById('form-card').classList.add('hidden');
-  document.getElementById('loading-card').classList.remove('hidden');
+  showView('loading');
 
   try {
     const result = await postJson({
       action: 'coach',
       raceDistance: distance,
       raceDate: date,
+      raceName: raceName,
       weeklyMileage: mileage,
       goalTime: goal,
       coachingStyle: style,
@@ -517,123 +1026,232 @@ async function submitForm() {
     });
 
     if (result.error) throw new Error(result.error);
-    renderResult(result.result);
+    if (!result.result) throw new Error('Empty response');
 
-    document.getElementById('loading-card').classList.add('hidden');
-    document.getElementById('result-card').classList.remove('hidden');
-  } catch (e) {
-    document.getElementById('loading-card').classList.add('hidden');
-    document.getElementById('form-card').classList.remove('hidden');
-    showAlert('Could not get coaching: ' + e.message);
+    // Override raceName if user provided one
+    if (raceName && !result.result.raceName) result.result.raceName = raceName;
+
+    savePlan(result.result);
+    renderDashboard();
+    showView('dashboard');
+  } catch(e) {
+    showView('setup');
+    showFormAlert('Could not build plan: ' + e.message);
   }
 }
 
-function renderResult(r) {
-  if (!r) return;
-  const el = document.getElementById('result-content');
-
-  let html = '';
-
-  // Header — race + total weeks
-  if (r.raceName || r.totalWeeks) {
-    html += '<div class="plan-header">';
-    if (r.raceName) html += '<div class="plan-race">' + escape(r.raceName) + '</div>';
-    if (r.raceDate) html += '<div class="plan-date">' + escape(r.raceDate) + '</div>';
-    if (r.totalWeeks) html += '<div class="plan-weeks">' + r.totalWeeks + '-week plan</div>';
-    html += '</div>';
-  }
-
-  // Summary
-  if (r.summary) {
-    html += '<div class="result-section"><div class="result-summary">' + escape(r.summary) + '</div></div>';
-  }
-
-  // Top priority — most prominent
-  if (r.topPriority) {
-    html += '<div class="result-section"><h3>Focus this week</h3><div class="top-rec">' + escape(r.topPriority) + '</div></div>';
-  }
-
-  // Pace zones
-  if (r.paceZones) {
-    html += '<div class="result-section"><h3>Your pace zones</h3><div class="pace-grid">';
-    if (r.paceZones.easy)     html += '<div class="pace-card"><div class="pace-label">Easy</div><div class="pace-value">' + escape(r.paceZones.easy) + '</div></div>';
-    if (r.paceZones.marathon) html += '<div class="pace-card"><div class="pace-label">Marathon</div><div class="pace-value">' + escape(r.paceZones.marathon) + '</div></div>';
-    if (r.paceZones.tempo)    html += '<div class="pace-card"><div class="pace-label">Tempo</div><div class="pace-value">' + escape(r.paceZones.tempo) + '</div></div>';
-    if (r.paceZones.interval) html += '<div class="pace-card"><div class="pace-label">Interval</div><div class="pace-value">' + escape(r.paceZones.interval) + '</div></div>';
-    html += '</div></div>';
-  }
-
-  // Phases
-  if (r.phases && r.phases.length) {
-    html += '<div class="result-section"><h3>Plan phases</h3>';
-    r.phases.forEach(p => {
-      html += '<div class="phase-row"><div class="phase-name">' + escape(p.name || '') + '</div>' +
-        '<div class="phase-weeks">Weeks ' + escape(p.weeks || '') + '</div>' +
-        '<div class="phase-goal">' + escape(p.goal || '') + '</div></div>';
-    });
-    html += '</div>';
-  }
-
-  // Run analysis
-  if (r.currentRunAnalysis) {
-    html += '<div class="result-section"><h3>What your runs show</h3><div class="result-summary">' + escape(r.currentRunAnalysis) + '</div></div>';
-  }
-
-  // Weekly plan
-  if (r.weeks && r.weeks.length) {
-    html += '<div class="result-section"><h3>Weekly schedule</h3>';
-    r.weeks.forEach(w => {
-      html += '<details class="week-details"><summary>' +
-        '<span class="week-num">Week ' + (w.week || '?') + '</span>' +
-        '<span class="week-phase">' + escape(w.phase || '') + '</span>' +
-        '<span class="week-mi">' + (w.totalMiles || 0) + ' mi</span>' +
-        '<span class="week-focus-text">' + escape(w.focus || '') + '</span>' +
-        '</summary>';
-      if (w.days && w.days.length) {
-        html += '<div class="day-grid">';
-        w.days.forEach(d => {
-          html += '<div class="day-row day-' + escape((d.type || '').toLowerCase()) + '">' +
-            '<div class="day-name">' + escape(d.day || '') + '</div>' +
-            '<div class="day-type">' + escape(d.type || '') + '</div>' +
-            '<div class="day-miles">' + (d.miles || d.miles === 0 ? d.miles + ' mi' : '') + '</div>' +
-            '<div class="day-note">' + escape(d.note || '') + '</div>' +
-            '</div>';
-        });
-        html += '</div>';
-      }
-      html += '</details>';
-    });
-    html += '</div>';
-  }
-
-  if (r.raw) {
-    html += '<div class="result-section"><h3>Raw response</h3><pre style="white-space:pre-wrap;font-size:12px;">' + escape(r.raw) + '</pre></div>';
-  }
-
-  el.innerHTML = html;
-}
-
-function escape(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-}
-
-function resetForm() {
-  document.getElementById('result-card').classList.add('hidden');
-  document.getElementById('form-card').classList.remove('hidden');
-  uploadedFiles = [];
-  renderFileList();
-}
-
-function showAlert(msg) {
+function showFormAlert(msg) {
   const el = document.getElementById('form-alert');
   el.textContent = msg;
   el.classList.remove('hidden');
 }
 
-// ══════════════════════════════════════════════════
-// POST helper — for large payloads (screenshots).
-// Uses text/plain content-type to avoid CORS preflight.
-// ══════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// DASHBOARD RENDERING
+// ════════════════════════════════════════════════════
+function renderDashboard() {
+  if (!plan) return;
+  renderHome();
+  renderPlan();
+  renderLog();
+  renderPerformance();
+  updateStatusPill();
+}
+
+function updateStatusPill() {
+  const wkIdx = getCurrentWeekIndex();
+  const totalWeeks = (plan && plan.weeks && plan.weeks.length) || 0;
+  const wkNum = Math.min(wkIdx + 1, totalWeeks);
+  const phase = (plan.weeks && plan.weeks[wkIdx]) ? plan.weeks[wkIdx].phase : '';
+  document.getElementById('status-pill').textContent = `Wk ${wkNum}${phase ? ' · ' + phase : ''}`;
+}
+
+// ─── HOME TAB ───
+function renderHome() {
+  const wkIdx = getCurrentWeekIndex();
+  const dayIdx = getCurrentDayIndex();
+  const week = plan.weeks && plan.weeks[wkIdx];
+  const today = week && week.days && week.days[dayIdx];
+
+  // Hero
+  document.getElementById('hero-tag').textContent =
+    week ? `Week ${week.week} · ${week.phase || ''}` : 'Plan Complete';
+
+  if (today) {
+    const icon = TYPE_ICONS[today.type] || '🏃';
+    document.getElementById('hero-workout').textContent =
+      `${icon} ${today.type}${today.miles ? ' · ' + today.miles + ' mi' : ''}`;
+    document.getElementById('hero-meta').textContent = today.note || '';
+  } else {
+    document.getElementById('hero-workout').textContent = '🏁 Race time';
+    document.getElementById('hero-meta').textContent = 'Trust your training';
+  }
+
+  // Day strip
+  const dayLetters = ['M','T','W','T','F','S','S'];
+  const stripEl = document.getElementById('day-strip');
+  stripEl.innerHTML = '';
+  if (week && week.days) {
+    week.days.forEach((d, i) => {
+      const isToday = i === dayIdx;
+      const isDone = i < dayIdx;
+      const cell = document.createElement('div');
+      cell.className = 'day-cell' + (isToday ? ' today' : (isDone ? ' done' : ''));
+      const icon = TYPE_ICONS[d.type] || '—';
+      cell.innerHTML = `<div class="day-letter">${dayLetters[i]}</div><div class="day-icon">${icon}</div><div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>`;
+      stripEl.appendChild(cell);
+    });
+  }
+
+  // Race countdown
+  const raceEl = document.getElementById('race-countdowns');
+  raceEl.innerHTML = '';
+  if (plan.raceDate) {
+    const days = daysBetween(todayISO(), plan.raceDate);
+    const totalDays = plan.weeks ? plan.weeks.length * 7 : 100;
+    const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
+    raceEl.innerHTML = `
+      <div class="race-card">
+        <div class="race-card-head">
+          <div>
+            <div class="race-name">${escape(plan.raceName || 'Your Race')}</div>
+            <div class="race-meta">${escape(plan.raceDate)}</div>
+          </div>
+          <div>
+            <div class="race-days">${days}</div>
+            <div class="race-days-sub">days out</div>
+          </div>
+        </div>
+        <div class="race-progress"><div class="race-progress-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }
+
+  // Quick stats
+  const totalMiles = (plan.weeks || []).reduce((s, w) => s + (w.totalMiles || 0), 0);
+  const milesDone = (plan.weeks || []).slice(0, wkIdx).reduce((s, w) => s + (w.totalMiles || 0), 0);
+  const peakWeek = (plan.weeks || []).reduce((max, w) => (w.totalMiles > (max.totalMiles || 0) ? w : max), {});
+
+  document.getElementById('quick-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${plan.weeks ? plan.weeks.length : 0}</div><div class="stat-label">Total Weeks</div></div>
+    <div class="stat-card"><div class="stat-value">${totalMiles}</div><div class="stat-label">Plan Miles</div><div class="stat-sub">${milesDone} done</div></div>
+    <div class="stat-card"><div class="stat-value">${peakWeek.totalMiles || 0}</div><div class="stat-label">Peak Week</div><div class="stat-sub">Wk ${peakWeek.week || '—'}</div></div>
+    <div class="stat-card"><div class="stat-value">${plan.phases ? plan.phases.length : 0}</div><div class="stat-label">Phases</div></div>
+  `;
+}
+
+// ─── PLAN TAB ───
+function renderPlan() {
+  // Summary at top
+  document.getElementById('plan-summary').innerHTML = plan.summary ? `
+    <div class="card">
+      <div style="font-size:13px;color:var(--ink-mid);line-height:1.6;">${escape(plan.summary)}</div>
+    </div>` : '';
+
+  // Mileage chart
+  const weeks = plan.weeks || [];
+  const max = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
+  const wkIdx = getCurrentWeekIndex();
+  const barsEl = document.getElementById('chart-bars');
+  barsEl.innerHTML = weeks.map((w, i) => {
+    const h = Math.round((w.totalMiles / max) * 80);
+    const color = getPhaseColor(w.phase) + '88';
+    const isCurrent = i === wkIdx;
+    return `<div class="chart-bar${isCurrent ? ' current' : ''}" style="height:${h}px;background:${isCurrent ? '#00C896' : color}" title="Wk ${w.week}: ${w.totalMiles} mi"></div>`;
+  }).join('');
+
+  const phases = plan.phases || [];
+  document.getElementById('chart-legend').innerHTML = phases.map(p =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${getPhaseColor(p.name)}"></div><span class="legend-label">${escape(p.name)}</span></div>`
+  ).join('');
+
+  // Week list — current and next 4
+  const dayLetters = ['M','T','W','T','F','S','S'];
+  const display = weeks.slice(wkIdx, wkIdx + 5);
+  document.getElementById('week-list').innerHTML = display.map((w, idx) => {
+    const isCurrent = idx === 0;
+    const phaseColor = getPhaseColor(w.phase);
+    const days = (w.days || []).map((d, i) => {
+      const isRest = d.type === 'Rest' || !d.miles;
+      return `<div class="day-mini${isRest ? ' rest' : ''}"><div class="label">${dayLetters[i]}</div><div class="val">${isRest ? '—' : d.miles}</div></div>`;
+    }).join('');
+    return `
+      <div class="week-card${isCurrent ? ' current' : ''}">
+        <div class="week-card-head">
+          <div>
+            <span class="week-num">WK ${w.week}</span>
+            <span class="week-pill" style="background:${phaseColor}33;color:${phaseColor}">${escape(w.phase || '')}</span>
+            ${isCurrent ? '<span class="week-pill now">NOW</span>' : ''}
+            <div class="week-focus">${escape(w.focus || '')}</div>
+          </div>
+          <div>
+            <div class="week-mi-big">${w.totalMiles || 0}</div>
+            <div class="week-mi-label">mi</div>
+          </div>
+        </div>
+        <div class="day-mini-grid">${days}</div>
+      </div>`;
+  }).join('') || '<div class="empty">Plan complete 🎉</div>';
+}
+
+// ─── LOG TAB ───
+function renderLog() {
+  document.getElementById('top-priority-card').innerHTML = plan.topPriority
+    ? `<div style="font-size:13px;color:var(--ink);line-height:1.6;">${escape(plan.topPriority)}</div>`
+    : '<div class="empty">No priority set</div>';
+
+  document.getElementById('run-analysis-card').innerHTML = plan.currentRunAnalysis
+    ? `<div style="font-size:13px;color:var(--ink-mid);line-height:1.6;">${escape(plan.currentRunAnalysis)}</div>`
+    : '<div class="empty"><span class="icon">📊</span>Upload Strava screenshots when starting a new plan to get a run analysis here.</div>';
+}
+
+// ─── PERFORMANCE TAB ───
+function renderPerformance() {
+  // Pace zones
+  const pz = plan.paceZones || {};
+  const zones = [
+    { key: 'easy',     label: 'Easy' },
+    { key: 'marathon', label: 'Marathon' },
+    { key: 'tempo',    label: 'Tempo' },
+    { key: 'interval', label: 'Interval' },
+  ];
+  document.getElementById('pace-zones').innerHTML = zones.filter(z => pz[z.key]).map(z =>
+    `<div class="pace-card"><div class="label">${z.label}</div><div class="value">${escape(pz[z.key])}</div></div>`
+  ).join('') || '<div class="empty" style="grid-column:1/-1;">No pace zones</div>';
+
+  // Phases
+  const wkIdx = getCurrentWeekIndex();
+  const currentWk = wkIdx + 1;
+  document.getElementById('phase-list').innerHTML = (plan.phases || []).map(p => {
+    const color = getPhaseColor(p.name);
+    const range = parseWeekRange(p.weeks);
+    const isCurrent = range && currentWk >= range[0] && currentWk <= range[1];
+    return `<div class="phase-row${isCurrent ? ' current' : ''}" style="border-left-color:${color}">
+      <div class="name" style="color:${color}">${escape(p.name)}${isCurrent ? ' · NOW' : ''}</div>
+      <div class="weeks">Weeks ${escape(p.weeks)}</div>
+      <div class="goal">${escape(p.goal || '')}</div>
+    </div>`;
+  }).join('') || '<div class="empty">No phases</div>';
+
+  // Coach's notes
+  const notes = [];
+  if (plan.summary)             notes.push({ icon: '📋', text: plan.summary });
+  if (plan.topPriority)         notes.push({ icon: '🎯', text: plan.topPriority });
+  if (plan.currentRunAnalysis)  notes.push({ icon: '📊', text: plan.currentRunAnalysis });
+  document.getElementById('coach-notes').innerHTML = notes.map(n =>
+    `<div class="note-card"><span class="note-icon">${n.icon}</span><span class="note-text">${escape(n.text)}</span></div>`
+  ).join('') || '<div class="empty">No notes yet</div>';
+}
+
+function parseWeekRange(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+)\s*[–-]\s*(\d+)/);
+  if (!m) return null;
+  return [parseInt(m[1]), parseInt(m[2])];
+}
+
+// ════════════════════════════════════════════════════
+// API
+// ════════════════════════════════════════════════════
 async function postJson(body) {
   const res = await fetch(SCRIPT_URL, {
     method: 'POST',
@@ -645,40 +1263,18 @@ async function postJson(body) {
   return res.json();
 }
 
-// ══════════════════════════════════════════════════
-// JSONP helper (used for ping / lightweight calls)
-// ══════════════════════════════════════════════════
-function jsonp(params) {
-  return new Promise((resolve, reject) => {
-    const cb = 'jsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      delete window[cb];
-      script.remove();
-      reject(new Error('Request timed out (45s)'));
-    }, 45000);
-
-    window[cb] = (data) => {
-      clearTimeout(timeout);
-      delete window[cb];
-      script.remove();
-      resolve(data);
-    };
-
-    const qs = Object.entries({ ...params, callback: cb })
-      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-      .join('&');
-
-    script.src = `${SCRIPT_URL}?${qs}`;
-    script.onerror = () => {
-      clearTimeout(timeout);
-      delete window[cb];
-      script.remove();
-      reject(new Error('Failed to reach server'));
-    };
-    document.body.appendChild(script);
-  });
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+function init() {
+  if (loadPlan()) {
+    renderDashboard();
+    showView('dashboard');
+  } else {
+    showView('setup');
+  }
 }
+init();
 </script>
 </body>
 </html>
