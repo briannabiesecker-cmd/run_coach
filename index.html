@@ -142,6 +142,50 @@
     position: relative;
     z-index: 1;
   }
+  .hero-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .readiness-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+  }
+  .readiness-pill.green  { background: rgba(0,200,150,0.15); color: var(--accent); border-color: var(--accent-border); }
+  .readiness-pill.yellow { background: rgba(250,204,21,0.12); color: #facc15; border-color: rgba(250,204,21,0.4); }
+  .readiness-pill.red    { background: rgba(239,68,68,0.12); color: #fca5a5; border-color: rgba(239,68,68,0.4); }
+  .readiness-banner {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-left: 3px solid;
+    position: relative;
+    z-index: 1;
+  }
+  .readiness-banner.yellow {
+    background: rgba(250,204,21,0.08);
+    border-left-color: #facc15;
+  }
+  .readiness-banner.red {
+    background: rgba(239,68,68,0.1);
+    border-left-color: #ef4444;
+  }
+  .readiness-banner .rb-suggest {
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .readiness-banner .rb-flags {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 4px;
+  }
   .hero-title {
     font-size: 22px;
     font-weight: 800;
@@ -2124,10 +2168,14 @@
 
       <!-- Hero card with today's workout -->
       <div class="hero" id="hero-card">
-        <div class="hero-tag" id="hero-tag">Loading</div>
+        <div class="hero-top-row">
+          <div class="hero-tag" id="hero-tag">Loading</div>
+          <div class="readiness-pill" id="readiness-pill"></div>
+        </div>
         <div class="hero-title">Today's Workout</div>
         <div class="hero-workout" id="hero-workout">—</div>
         <div class="hero-meta" id="hero-meta">—</div>
+        <div id="readiness-banner"></div>
         <div class="day-strip" id="day-strip"></div>
       </div>
 
@@ -2820,19 +2868,22 @@ function gatherWeekData(weekIdx) {
   let cumPlanned = 0, cumDone = 0, cumDoneRuns = 0, cumSkipped = 0;
   for (let i = 0; i <= weekIdx; i++) {
     const w = plan.weeks[i];
-    if (!w || !w.days) continue;
+    if (!w) continue;
     cumPlanned += w.totalMiles || 0;
-    w.days.forEach((d, di) => {
-      if (d.type === 'Rest' || !d.miles) return;
+    // Iterate ALL 7 calendar days so logged runs on rest days count
+    for (let di = 0; di < 7; di++) {
       const date = new Date(planStartDate + 'T00:00:00');
       date.setDate(date.getDate() + i * 7 + di);
       const iso = date.toISOString().slice(0, 10);
       const ci = checkIns[iso] && checkIns[iso].run;
-      if (ci) {
-        if (ci.status === 'done')    { cumDone += (ci.distance || d.miles); cumDoneRuns++; }
-        if (ci.status === 'skipped') cumSkipped++;
+      if (!ci) continue;
+      if (ci.status === 'done') {
+        const plannedMi = (w.days && w.days[di]) ? (w.days[di].miles || 0) : 0;
+        cumDone += (ci.distance || plannedMi || 0);
+        cumDoneRuns++;
       }
-    });
+      if (ci.status === 'skipped') cumSkipped++;
+    }
   }
   const cumStats = {
     weeksCompleted: weekIdx + 1,
@@ -3801,6 +3852,107 @@ function updateStatusPill() {
   document.getElementById('status-pill').textContent = `Wk ${wkNum}${phase ? ' · ' + phase : ''}`;
 }
 
+// ─── READINESS FLAG ───
+// Combines wellness ping + recent RPE + recent compliance + today's planned workout.
+// Returns { status: 'green'|'yellow'|'red', message, suggestion, flags }
+function computeReadiness() {
+  const today = todayISO();
+  const wellnessToday = wellness[today];
+
+  // Yesterday's check-in
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const yesterdayISO = y.toISOString().slice(0, 10);
+  const yesterdayCI = (checkIns[yesterdayISO] && checkIns[yesterdayISO].run) || null;
+
+  // Today's planned workout
+  const wkIdx = getCurrentWeekIndex();
+  const dayIdx = getCurrentDayIndex();
+  const week = plan && plan.weeks && plan.weeks[wkIdx];
+  const todayWorkout = week && week.days && week.days[dayIdx];
+  const isHardToday = todayWorkout && ['Tempo', 'Intervals', 'Hill Repeats', 'Long'].indexOf(todayWorkout.type) !== -1;
+
+  // Last 7 days of run check-ins
+  let recentRPEs = [];
+  let recentSkipped = 0;
+  let recentDone = 0;
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    const ci = checkIns[iso] && checkIns[iso].run;
+    if (!ci) continue;
+    if (ci.rpe) recentRPEs.push(ci.rpe);
+    if (ci.status === 'skipped') recentSkipped++;
+    if (ci.status === 'done') recentDone++;
+  }
+  const avgRecentRPE = recentRPEs.length ? recentRPEs.reduce((a, b) => a + b, 0) / recentRPEs.length : 0;
+
+  const flags = [];
+  let hardFlag = false;
+
+  // ─── HARD FLAGS (any one → red) ───
+  if (wellnessToday && wellnessToday.sleep && wellnessToday.sleep <= 4) {
+    flags.push({ type: 'hard', text: 'Sleep critically low (' + wellnessToday.sleep + '/10)' });
+    hardFlag = true;
+  }
+  if (wellnessToday && wellnessToday.soreness && wellnessToday.soreness >= 8) {
+    flags.push({ type: 'hard', text: 'Soreness very high (' + wellnessToday.soreness + '/10)' });
+    hardFlag = true;
+  }
+  if (yesterdayCI && yesterdayCI.rpe >= 9 && isHardToday) {
+    flags.push({ type: 'hard', text: 'Yesterday was max effort (RPE ' + yesterdayCI.rpe + ')' });
+    hardFlag = true;
+  }
+  if (recentSkipped >= 3 && isHardToday) {
+    flags.push({ type: 'hard', text: recentSkipped + ' missed runs this week' });
+    hardFlag = true;
+  }
+
+  // ─── SOFT FLAGS (2+ → yellow on hard day, 3+ → red) ───
+  if (wellnessToday && wellnessToday.sleep && wellnessToday.sleep <= 6 && wellnessToday.sleep > 4) {
+    flags.push({ type: 'soft', text: 'Sleep below 7 (' + wellnessToday.sleep + '/10)' });
+  }
+  if (wellnessToday && wellnessToday.soreness && wellnessToday.soreness >= 6 && wellnessToday.soreness < 8) {
+    flags.push({ type: 'soft', text: 'Soreness elevated (' + wellnessToday.soreness + '/10)' });
+  }
+  if (yesterdayCI && yesterdayCI.rpe && yesterdayCI.rpe >= 8 && yesterdayCI.rpe < 9) {
+    flags.push({ type: 'soft', text: 'Yesterday was hard (RPE ' + yesterdayCI.rpe + ')' });
+  }
+  if (avgRecentRPE >= 7 && recentRPEs.length >= 3) {
+    flags.push({ type: 'soft', text: 'RPE trending high (avg ' + avgRecentRPE.toFixed(1) + ')' });
+  }
+  if (recentSkipped >= 2 && !hardFlag) {
+    flags.push({ type: 'soft', text: recentSkipped + ' missed runs recently' });
+  }
+
+  const softCount = flags.filter(f => f.type === 'soft').length;
+
+  let status, message, suggestion;
+  if (hardFlag || softCount >= 3) {
+    status = 'red';
+    message = 'Pull back today';
+    suggestion = isHardToday
+      ? `Multiple flags + today is ${todayWorkout.type}. Swap for Easy or Rest.`
+      : 'Take it very easy or rest fully. Recovery is training.';
+  } else if (softCount >= 2) {
+    status = 'yellow';
+    message = 'Caution';
+    suggestion = isHardToday
+      ? `Several soft signals. Consider easing today's ${todayWorkout.type}.`
+      : 'Listen to your body — easy effort is fine.';
+  } else if (softCount === 1) {
+    status = 'yellow';
+    message = 'Heads up';
+    suggestion = flags[0].text + '. Proceed mindfully.';
+  } else {
+    status = 'green';
+    message = wellnessToday ? 'Cleared to train' : 'Log wellness for full read';
+    suggestion = '';
+  }
+
+  return { status, message, suggestion, flags };
+}
+
 // ─── INTENTION CARD ───
 const INTENTION_LIB = {
   'Easy': {
@@ -3916,22 +4068,22 @@ function findWorkoutInWeek(week, types) {
 }
 
 function getWeekProgress(weekIdx) {
-  // Sum miles done (from check-ins marked done) for the week's runs
+  // Iterate ALL 7 calendar days of the week so logged runs on rest days count too
   if (!plan || !plan.weeks || !plan.weeks[weekIdx]) return { done: 0, planned: 0 };
   const week = plan.weeks[weekIdx];
   let planned = week.totalMiles || 0;
   let done = 0;
-  // Need to map each day in the week to a date and check the check-in
-  // planStartDate + (weekIdx*7 + dayIdx) days
-  if (planStartDate && week.days) {
-    week.days.forEach((d, i) => {
-      if (!d.miles || d.type === 'Rest') return;
+  if (planStartDate) {
+    for (let i = 0; i < 7; i++) {
       const date = new Date(planStartDate + 'T00:00:00');
       date.setDate(date.getDate() + weekIdx * 7 + i);
-      const iso = date.toISOString().slice(0,10);
+      const iso = date.toISOString().slice(0, 10);
       const ci = getCheckIn(iso, 'run');
-      if (ci && ci.status === 'done') done += d.miles;
-    });
+      if (ci && ci.status === 'done') {
+        const plannedMi = (week.days && week.days[i]) ? (week.days[i].miles || 0) : 0;
+        done += ci.distance || plannedMi || 0;
+      }
+    }
   }
   return { done, planned };
 }
@@ -4215,6 +4367,24 @@ function renderHome() {
   document.getElementById('hero-tag').textContent =
     week ? `Week ${week.week} · ${week.phase || ''}` : 'Plan Complete';
 
+  // Readiness flag
+  const readiness = computeReadiness();
+  const pill = document.getElementById('readiness-pill');
+  const dotIcon = readiness.status === 'green' ? '🟢' : readiness.status === 'yellow' ? '🟡' : '🔴';
+  pill.className = 'readiness-pill ' + readiness.status;
+  pill.innerHTML = `${dotIcon} ${escape(readiness.message)}`;
+  const banner = document.getElementById('readiness-banner');
+  if (readiness.status !== 'green' && readiness.suggestion) {
+    const flagsList = readiness.flags.map(f => f.text).join(' · ');
+    banner.innerHTML = `
+      <div class="readiness-banner ${readiness.status}">
+        <div class="rb-suggest">${escape(readiness.suggestion)}</div>
+        <div class="rb-flags">${escape(flagsList)}</div>
+      </div>`;
+  } else {
+    banner.innerHTML = '';
+  }
+
   // Check today's strength early so we can mention it in the hero
   const todayShortHero = DAYS_FULL[dayIdx];
   const todayStrengthHero = getStrengthForDay(todayShortHero);
@@ -4352,19 +4522,18 @@ function renderPlan() {
   if (navBtns[0]) navBtns[0].disabled = wkIdx <= 0;
   if (navBtns[1]) navBtns[1].disabled = wkIdx >= weeks.length - 1;
 
-  // Progress segments + workouts completed
+  // Progress segments + workouts completed (count any logged 'done' run in the week)
   const dayLabels = ['M','T','W','T','F','S','S'];
   const totalRunDays = (week.days || []).filter(d => d.type !== 'Rest' && d.miles).length;
   let doneRunDays = 0;
   if (planStartDate) {
-    (week.days || []).forEach((d, i) => {
-      if (d.type === 'Rest' || !d.miles) return;
+    for (let i = 0; i < 7; i++) {
       const date = new Date(planStartDate + 'T00:00:00');
       date.setDate(date.getDate() + wkIdx * 7 + i);
-      const iso = date.toISOString().slice(0,10);
+      const iso = date.toISOString().slice(0, 10);
       const ci = checkIns[iso] && checkIns[iso].run;
       if (ci && ci.status === 'done') doneRunDays++;
-    });
+    }
   }
   const segments = [];
   for (let i = 0; i < totalRunDays; i++) {
@@ -4699,7 +4868,8 @@ function renderMileageProgressionChart() {
   const today = todayISO();
   const currentIdx = getCurrentWeekIndex();
 
-  // Compute actual miles per week from check-ins
+  // Compute actual miles per week — iterate ALL 7 calendar days, NOT just
+  // planned non-rest days (so logged runs on rest days / substitutions count).
   let totalPlanned = 0;
   let totalActual = 0;
   let weeksWithData = 0;
@@ -4707,23 +4877,23 @@ function renderMileageProgressionChart() {
 
   const data = weeks.map((w, wkIdx) => {
     let actual = 0;
-    if (planStartDate && w.days) {
-      w.days.forEach((d, di) => {
+    if (planStartDate) {
+      for (let di = 0; di < 7; di++) {
         const date = new Date(planStartDate + 'T00:00:00');
         date.setDate(date.getDate() + wkIdx * 7 + di);
         const iso = date.toISOString().slice(0, 10);
         const ci = checkIns[iso] && checkIns[iso].run;
         if (ci && ci.status === 'done') {
-          actual += ci.distance || d.miles || 0;
+          const plannedMi = (w.days && w.days[di]) ? (w.days[di].miles || 0) : 0;
+          actual += ci.distance || plannedMi || 0;
         }
-      });
+      }
     }
     const planned = w.totalMiles || 0;
     if (wkIdx <= currentIdx) {
       totalPlanned += planned;
       totalActual += actual;
       if (actual > 0) weeksWithData++;
-      // "On track" = within 80% of planned
       if (planned > 0 && actual >= planned * 0.8) onTrackWeeks++;
     }
     return { wkNum: w.week, planned, actual, isCurrent: wkIdx === currentIdx, isPast: wkIdx < currentIdx };
