@@ -253,6 +253,14 @@
     margin-top: 3px;
   }
   .day-cell.today .day-sub { color: #0a1628; }
+  .day-check {
+    font-size: 10px;
+    color: var(--accent);
+    font-weight: 800;
+    margin-top: 2px;
+  }
+  .day-cell.done .day-check { color: var(--accent); }
+  .day-cell.today .day-check { color: #0a1628; }
 
   /* ─── Race countdown ───────────────────────────── */
   .race-card {
@@ -418,13 +426,183 @@
     line-height: 1.3;
   }
 
-  /* ─── Mileage progression chart (Performance tab) ── */
+  /* ─── Mileage progression — REDESIGN ─── */
   .mileage-prog-card {
     background: var(--bg-elev);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 16px 14px;
     margin-bottom: 12px;
+  }
+
+  /* Phase ribbon */
+  .phase-ribbon-wrap {
+    margin-bottom: 14px;
+  }
+  .phase-ribbon {
+    display: flex;
+    gap: 2px;
+    height: 22px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-elev-2);
+    position: relative;
+  }
+  .phase-block {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: rgba(0,0,0,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: filter 0.15s;
+  }
+  .phase-block:hover { filter: brightness(1.1); }
+  .phase-marker {
+    position: absolute;
+    top: -6px;
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--ink);
+    transform: translateX(-50%);
+    transition: left 0.4s ease;
+  }
+  .phase-ribbon-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--ink-light);
+  }
+  .phase-ribbon-labels .you-are-here {
+    color: var(--accent);
+    font-weight: 800;
+  }
+
+  /* Sparkline */
+  .sparkline-wrap {
+    margin-top: 14px;
+    margin-bottom: 14px;
+    background: var(--bg-elev-2);
+    border-radius: 10px;
+    padding: 10px 10px 6px;
+  }
+  .sparkline-svg {
+    width: 100%;
+    height: 80px;
+    display: block;
+  }
+  .sparkline-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--ink-light);
+  }
+  .sparkline-legend .item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .sparkline-legend .swatch {
+    width: 14px;
+    height: 2px;
+  }
+  .sparkline-legend .swatch.planned { background: rgba(255,255,255,0.3); border-top: 1px dashed rgba(255,255,255,0.5); }
+  .sparkline-legend .swatch.actual  { background: var(--accent); }
+
+  /* Stats row */
+  .mileage-prog-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .hist-banner {
+    font-size: 11px;
+    color: var(--ink-light);
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .hist-banner strong { color: var(--ink); font-weight: 700; }
+
+  /* Recent weeks detail strip */
+  .recent-weeks-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 8px 0 8px;
+  }
+  .recent-weeks-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .recent-week-tile {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .recent-week-tile:hover { border-color: var(--border-strong); }
+  .recent-week-tile.current { border-color: var(--accent); background: rgba(0,200,150,0.05); }
+  .rwt-label {
+    font-size: 10px;
+    color: var(--ink-light);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .rwt-bars {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    justify-content: center;
+    height: 36px;
+    margin: 6px 0 4px;
+  }
+  .rwt-bar {
+    width: 12px;
+    border-radius: 2px 2px 0 0;
+  }
+  .rwt-bar.planned {
+    background: rgba(255,255,255,0.12);
+    border: 1px dashed rgba(255,255,255,0.3);
+  }
+  .rwt-bar.actual {
+    background: var(--accent);
+  }
+  .rwt-bar.actual.warn { background: #facc15; }
+  .rwt-bar.actual.bad  { background: #ef4444; }
+  .rwt-numbers {
+    font-size: 11px;
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .rwt-numbers .planned-num {
+    color: var(--ink-light);
+    font-size: 10px;
+    margin-left: 2px;
+  }
+  .rwt-pct {
+    font-size: 9px;
+    color: var(--ink-light);
+    margin-top: 2px;
   }
   .mileage-prog-stats {
     display: grid;
@@ -2602,10 +2780,21 @@ function switchTab(tab) {
 // ════════════════════════════════════════════════════
 // PERSISTENCE
 // ════════════════════════════════════════════════════
+// Get the most recent Monday (or today if today is Monday) as ISO string
+function getMondayOfThisWeek() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  // getDay(): Sun=0, Mon=1, ... Sat=6
+  // Days to subtract to land on Monday: (day + 6) % 7
+  const daysBack = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - daysBack);
+  return d.toISOString().slice(0, 10);
+}
+
 function savePlan(p) {
   const payload = {
     plan: p,
-    planStartDate: todayISO(),
+    planStartDate: getMondayOfThisWeek(), // ALWAYS a Monday so week math aligns
     savedAt: new Date().toISOString(),
     strengthSchedule: strengthSchedule,
     checkIns: checkIns,
@@ -2615,6 +2804,27 @@ function savePlan(p) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
   planStartDate = payload.planStartDate;
+}
+
+// Migration: if an existing plan has a non-Monday planStartDate, snap it back
+function ensurePlanStartIsMonday() {
+  if (!planStartDate) return;
+  const d = new Date(planStartDate + 'T00:00:00');
+  if (d.getDay() === 1) return; // already Monday
+  // Snap to the most recent Monday on or before planStartDate
+  const daysBack = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - daysBack);
+  planStartDate = d.toISOString().slice(0, 10);
+  // Persist the corrected value
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      data.planStartDate = planStartDate;
+      data.savedAt = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch(e) {}
 }
 
 function loadPlan() {
@@ -2628,6 +2838,7 @@ function loadPlan() {
     checkIns = data.checkIns || {};
     wellness = data.wellness || {};
     weeklyReviews = data.weeklyReviews || {};
+    ensurePlanStartIsMonday(); // migrate old plans whose start wasn't a Monday
     return true;
   } catch(e) { return false; }
 }
@@ -4448,21 +4659,33 @@ function renderHome() {
     document.getElementById('hero-meta').textContent = 'Trust your training';
   }
 
-  // Day strip
+  // Day strip — shows planned + actual check-in indicator
   const dayLetters = ['M','T','W','T','F','S','S'];
   const stripEl = document.getElementById('day-strip');
   stripEl.innerHTML = '';
   if (week && week.days) {
     week.days.forEach((d, i) => {
       const isToday = i === dayIdx;
-      const isDone = i < dayIdx;
+      const isPast = i < dayIdx;
+
+      // Compute the calendar date for this day
+      let hasActualRun = false;
+      if (planStartDate) {
+        const dt = new Date(planStartDate + 'T00:00:00');
+        dt.setDate(dt.getDate() + wkIdx * 7 + i);
+        const iso = dt.toISOString().slice(0, 10);
+        const ci = checkIns[iso] && checkIns[iso].run;
+        if (ci && ci.status === 'done') hasActualRun = true;
+      }
+
       const cell = document.createElement('div');
-      cell.className = 'day-cell' + (isToday ? ' today' : (isDone ? ' done' : ''));
+      cell.className = 'day-cell' + (isToday ? ' today' : (hasActualRun ? ' done' : (isPast ? ' past' : '')));
       const icon = TYPE_ICONS[d.type] || '—';
       const dayShort = DAYS_FULL[i];
       const hasStrength = getStrengthForDay(dayShort).length > 0;
       const strengthMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
-      cell.innerHTML = `<div class="day-letter">${dayLetters[i]}</div><div class="day-icon">${icon}</div><div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>${strengthMark}`;
+      const checkMark = hasActualRun ? '<div class="day-check">✓</div>' : '';
+      cell.innerHTML = `<div class="day-letter">${dayLetters[i]}</div><div class="day-icon">${icon}</div><div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>${checkMark}${strengthMark}`;
       stripEl.appendChild(cell);
     });
   }
@@ -4912,138 +5135,243 @@ function renderWeeklyReviewSection() {
     </div>`;
 }
 
+// Compute actual miles for a single plan week index
+function actualMilesForWeek(wkIdx) {
+  if (!plan || !plan.weeks || !plan.weeks[wkIdx] || !planStartDate) return 0;
+  const w = plan.weeks[wkIdx];
+  let actual = 0;
+  for (let di = 0; di < 7; di++) {
+    const date = new Date(planStartDate + 'T00:00:00');
+    date.setDate(date.getDate() + wkIdx * 7 + di);
+    const iso = date.toISOString().slice(0, 10);
+    const ci = checkIns[iso] && checkIns[iso].run;
+    if (ci && ci.status === 'done') {
+      const plannedMi = (w.days && w.days[di]) ? (w.days[di].miles || 0) : 0;
+      actual += ci.distance || plannedMi || 0;
+    }
+  }
+  return actual;
+}
+
+// Returns historical week buckets (newest first → oldest first)
+function getHistoricalWeeks() {
+  if (!planStartDate) return [];
+  let earliest = null;
+  Object.keys(checkIns).forEach(iso => {
+    if (checkIns[iso] && checkIns[iso].run && (!earliest || iso < earliest)) earliest = iso;
+  });
+  if (!earliest || earliest >= planStartDate) return [];
+  const earliestD = new Date(earliest + 'T00:00:00');
+  const planStart = new Date(planStartDate + 'T00:00:00');
+  const numHistWeeks = Math.ceil((planStart - earliestD) / 86400000 / 7);
+  const out = [];
+  for (let h = numHistWeeks; h >= 1; h--) {
+    const wkStart = new Date(planStart);
+    wkStart.setDate(wkStart.getDate() - h * 7);
+    let actual = 0;
+    for (let di = 0; di < 7; di++) {
+      const d = new Date(wkStart);
+      d.setDate(d.getDate() + di);
+      const iso = d.toISOString().slice(0, 10);
+      const ci = checkIns[iso] && checkIns[iso].run;
+      if (ci && ci.status === 'done') actual += ci.distance || 0;
+    }
+    out.push({ wkStart: wkStart.toISOString().slice(0,10), actual, isHistorical: true });
+  }
+  return out;
+}
+
+function renderPhaseRibbon() {
+  if (!plan || !plan.phases || !plan.phases.length) return '';
+  const totalWeeks = plan.weeks ? plan.weeks.length : 0;
+  if (!totalWeeks) return '';
+  const currentIdx = getCurrentWeekIndex();
+  const currentWk = currentIdx + 1;
+
+  // Compute current phase
+  let currentPhaseName = '';
+  const phases = plan.phases.map(p => {
+    const range = parseWeekRange(p.weeks);
+    if (range && currentWk >= range[0] && currentWk <= range[1]) currentPhaseName = p.name;
+    return { ...p, range };
+  }).filter(p => p.range);
+
+  if (!phases.length) return '';
+
+  // Marker position as % across the entire plan
+  const markerPct = ((currentWk - 0.5) / totalWeeks) * 100;
+
+  const blocks = phases.map(p => {
+    const widthPct = ((p.range[1] - p.range[0] + 1) / totalWeeks) * 100;
+    const color = getPhaseColor(p.name);
+    return `<div class="phase-block" style="width:${widthPct}%;background:${color};" onclick="viewedWeekIdx=${p.range[0] - 1};switchTab('plan');renderPlan();" title="${escape(p.name)}: weeks ${p.range[0]}-${p.range[1]}">${escape(p.name)}</div>`;
+  }).join('');
+
+  return `
+    <div class="phase-ribbon-wrap">
+      <div class="phase-ribbon">
+        ${blocks}
+        <div class="phase-marker" style="left:${markerPct}%;"></div>
+      </div>
+      <div class="phase-ribbon-labels">
+        <span>Week 1</span>
+        <span class="you-are-here">You are here · Wk ${currentWk} (${escape(currentPhaseName || '—')})</span>
+        <span>Week ${totalWeeks}</span>
+      </div>
+    </div>`;
+}
+
+function renderSparkline() {
+  if (!plan || !plan.weeks || plan.weeks.length < 2) return '';
+  const weeks = plan.weeks;
+  const N = weeks.length;
+  const W = 100; // viewBox width units (% based)
+  const H = 100;
+  const max = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
+  const padX = 4;
+  const padY = 8;
+  const innerW = W - padX * 2;
+  const innerH = H - padY * 2;
+
+  // Planned curve
+  const plannedPts = weeks.map((w, i) => {
+    const x = padX + (i / (N - 1)) * innerW;
+    const y = padY + innerH - ((w.totalMiles || 0) / max) * innerH;
+    return [x, y];
+  });
+
+  // Smooth path through planned points
+  const plannedPath = plannedPts.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
+
+  // Actual dots — only weeks with logged data
+  const currentIdx = getCurrentWeekIndex();
+  const actualDots = [];
+  for (let i = 0; i <= currentIdx && i < N; i++) {
+    const a = actualMilesForWeek(i);
+    if (a > 0) {
+      const x = padX + (i / (N - 1)) * innerW;
+      const y = padY + innerH - (a / max) * innerH;
+      actualDots.push({ x, y, mi: a, planned: weeks[i].totalMiles || 0 });
+    }
+  }
+
+  // Current week marker (vertical line)
+  const currentX = padX + (currentIdx / (N - 1)) * innerW;
+
+  return `
+    <div class="sparkline-wrap">
+      <svg class="sparkline-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <line x1="${currentX}" y1="${padY}" x2="${currentX}" y2="${H - padY}" stroke="rgba(0,200,150,0.3)" stroke-width="0.5" stroke-dasharray="2,2"/>
+        <path d="${plannedPath}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1" stroke-dasharray="2,1.5"/>
+        ${actualDots.map(d => `<circle cx="${d.x}" cy="${d.y}" r="1.5" fill="#00C896"/>`).join('')}
+        ${actualDots.length > 1 ? `<polyline fill="none" stroke="#00C896" stroke-width="1" points="${actualDots.map(d => d.x + ',' + d.y).join(' ')}"/>` : ''}
+        <text x="${W - padX}" y="${padY + 3}" text-anchor="end" font-size="6" fill="#fca5a5">🏁</text>
+      </svg>
+      <div class="sparkline-legend">
+        <div class="item"><div class="swatch planned"></div>Planned curve</div>
+        <div class="item"><div class="swatch actual"></div>Actual</div>
+      </div>
+    </div>`;
+}
+
+function renderRecentWeeksDetail() {
+  if (!plan || !plan.weeks) return '';
+  const currentIdx = getCurrentWeekIndex();
+  const histWeeks = getHistoricalWeeks(); // backfilled history
+  // Build a list of "candidates" for the recent 4 (newest right): include up to current + maybe peek 1 ahead
+  // We want: 4 tiles ending at current week
+  const tiles = [];
+  for (let offset = -3; offset <= 0; offset++) {
+    const wkIdx = currentIdx + offset;
+    if (wkIdx >= 0 && wkIdx < plan.weeks.length) {
+      const w = plan.weeks[wkIdx];
+      tiles.push({
+        wkIdx,
+        label: `Wk ${w.week}`,
+        planned: w.totalMiles || 0,
+        actual: actualMilesForWeek(wkIdx),
+        isCurrent: offset === 0,
+        isHistorical: false
+      });
+    } else if (wkIdx < 0 && histWeeks.length >= -wkIdx) {
+      // Pull from historical weeks
+      const histIdx = histWeeks.length + wkIdx; // wkIdx is negative
+      if (histIdx >= 0) {
+        const h = histWeeks[histIdx];
+        tiles.push({
+          label: 'Pre-plan',
+          planned: 0,
+          actual: h.actual,
+          isCurrent: false,
+          isHistorical: true
+        });
+      }
+    }
+  }
+  if (!tiles.length) return '';
+
+  const max = Math.max(...tiles.map(t => Math.max(t.planned, t.actual)), 1);
+
+  const html = tiles.map(t => {
+    const pct = t.planned > 0 ? Math.round((t.actual / t.planned) * 100) : null;
+    const actualClass = pct == null ? '' : pct >= 80 ? '' : pct >= 50 ? ' warn' : ' bad';
+    const plannedH = t.planned > 0 ? Math.max(4, Math.round((t.planned / max) * 36)) : 0;
+    const actualH = t.actual > 0 ? Math.max(4, Math.round((t.actual / max) * 36)) : 0;
+    const plannedBar = t.isHistorical ? '' : `<div class="rwt-bar planned" style="height:${plannedH}px;"></div>`;
+    const onClick = t.wkIdx != null ? `onclick="viewedWeekIdx=${t.wkIdx};switchTab('plan');renderPlan();"` : '';
+    return `
+      <div class="recent-week-tile${t.isCurrent ? ' current' : ''}" ${onClick}>
+        <div class="rwt-label">${escape(t.label)}</div>
+        <div class="rwt-bars">
+          ${plannedBar}
+          <div class="rwt-bar actual${actualClass}" style="height:${actualH}px;"></div>
+        </div>
+        <div class="rwt-numbers">
+          ${t.actual.toFixed(0)}<span class="planned-num">${t.planned > 0 ? '/ ' + t.planned : ''}</span>
+        </div>
+        ${pct != null ? `<div class="rwt-pct">${pct}%</div>` : '<div class="rwt-pct">—</div>'}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="recent-weeks-label">Recent 4 weeks</div>
+    <div class="recent-weeks-grid">${html}</div>
+  `;
+}
+
 function renderMileageProgressionChart() {
   const el = document.getElementById('mileage-chart-section');
   if (!el || !plan || !plan.weeks) return;
 
   const weeks = plan.weeks;
-  const today = todayISO();
   const currentIdx = getCurrentWeekIndex();
 
-  // Find the earliest check-in date so we can prepend historical weeks
-  // (data from before planStartDate). This way backfilled runs show up.
-  let earliestCheckInISO = null;
-  Object.keys(checkIns).forEach(iso => {
-    if (checkIns[iso] && checkIns[iso].run && (!earliestCheckInISO || iso < earliestCheckInISO)) {
-      earliestCheckInISO = iso;
-    }
-  });
-
-  // Compute how many historical weeks to prepend
-  let historicalWeeks = [];
-  if (earliestCheckInISO && planStartDate && earliestCheckInISO < planStartDate) {
-    const earliest = new Date(earliestCheckInISO + 'T00:00:00');
-    const planStart = new Date(planStartDate + 'T00:00:00');
-    const daysBack = Math.ceil((planStart - earliest) / 86400000);
-    const numHistWeeks = Math.ceil(daysBack / 7);
-    for (let h = numHistWeeks; h > 0; h--) {
-      // This historical week starts (h*7) days before planStartDate
-      const weekStart = new Date(planStart);
-      weekStart.setDate(weekStart.getDate() - h * 7);
-      const weekStartISO = weekStart.toISOString().slice(0, 10);
-      let actual = 0;
-      for (let di = 0; di < 7; di++) {
-        const d = new Date(weekStart);
-        d.setDate(d.getDate() + di);
-        const iso = d.toISOString().slice(0, 10);
-        const ci = checkIns[iso] && checkIns[iso].run;
-        if (ci && ci.status === 'done') {
-          actual += ci.distance || 0;
-        }
-      }
-      historicalWeeks.push({
-        wkNum: '–' + h,
-        planned: 0,
-        actual,
-        isCurrent: false,
-        isPast: true,
-        isHistorical: true,
-        weekStartISO
-      });
-    }
-  }
-
-  // Compute actual miles per plan week — iterate ALL 7 calendar days, NOT just
-  // planned non-rest days (so logged runs on rest days / substitutions count).
+  // Compute totals — plan window only (no historical pollution)
   let totalPlanned = 0;
   let totalActual = 0;
-  let weeksWithData = 0;
-  let onTrackWeeks = 0;
-
-  const planData = weeks.map((w, wkIdx) => {
-    let actual = 0;
-    if (planStartDate) {
-      for (let di = 0; di < 7; di++) {
-        const date = new Date(planStartDate + 'T00:00:00');
-        date.setDate(date.getDate() + wkIdx * 7 + di);
-        const iso = date.toISOString().slice(0, 10);
-        const ci = checkIns[iso] && checkIns[iso].run;
-        if (ci && ci.status === 'done') {
-          const plannedMi = (w.days && w.days[di]) ? (w.days[di].miles || 0) : 0;
-          actual += ci.distance || plannedMi || 0;
-        }
-      }
-    }
-    const planned = w.totalMiles || 0;
-    if (wkIdx <= currentIdx) {
-      totalPlanned += planned;
-      totalActual += actual;
-      if (actual > 0) weeksWithData++;
-      if (planned > 0 && actual >= planned * 0.8) onTrackWeeks++;
-    }
-    return { wkNum: w.week, planned, actual, isCurrent: wkIdx === currentIdx, isPast: wkIdx < currentIdx };
-  });
-
-  // Combine historical + plan weeks for the chart visual
-  const data = historicalWeeks.concat(planData);
-
-  // Historical miles tracked SEPARATELY — they show on the chart but
-  // compliance % only reflects the plan window (apples-to-apples).
-  const historicalMi = historicalWeeks.reduce((s, h) => s + h.actual, 0);
-
-  // maxMi must consider both planned and historical actuals so historical bars
-  // don't get clipped if they're larger than the planned weeks
-  const histMax = historicalWeeks.length ? Math.max(...historicalWeeks.map(h => h.actual)) : 0;
-  const maxMi = Math.max(...weeks.map(w => w.totalMiles || 0), histMax, 1);
+  for (let i = 0; i <= currentIdx && i < weeks.length; i++) {
+    totalPlanned += weeks[i].totalMiles || 0;
+    totalActual += actualMilesForWeek(i);
+  }
   const compliance = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
   const complianceClass = compliance >= 80 ? '' : compliance >= 50 ? 'warn' : 'bad';
 
-  // Bars (historical weeks have no planned bar; plan weeks have both)
-  const bars = data.map((d, i) => {
-    const plannedH = Math.round((d.planned / maxMi) * 95);
-    const actualH = Math.round((d.actual / maxMi) * 95);
-    const overPlanned = d.actual > d.planned;
-    const showLabel = i % 2 === 0 || i === data.length - 1;
-    const planIdx = i - historicalWeeks.length;
-    const onClick = !d.isHistorical && planIdx >= 0
-      ? `onclick="viewedWeekIdx=${planIdx};switchTab('plan');renderPlan();"`
-      : '';
-    const tooltip = d.isHistorical
-      ? `Pre-plan week: ${d.actual.toFixed(1)} mi`
-      : `Wk ${d.wkNum}: ${d.actual.toFixed(1)} of ${d.planned} mi`;
-    const plannedBar = d.isHistorical ? '' : `<div class="mp-bar-planned" style="height:${plannedH}px;"></div>`;
-    const histClass = d.isHistorical ? ' historical' : '';
-    return `
-      <div class="mp-week${d.isCurrent ? ' current' : ''}${histClass}" ${onClick} title="${tooltip}">
-        <div class="mp-week-bars">
-          ${plannedBar}
-          <div class="mp-bar-actual${overPlanned ? ' over' : ''}" style="height:${actualH}px;"></div>
-        </div>
-        ${showLabel ? `<div class="mp-week-label">${escape(String(d.wkNum))}</div>` : '<div class="mp-week-label"></div>'}
-      </div>`;
-  }).join('');
+  // Historical (backfill) miles — shown as a banner only
+  const historicalMi = getHistoricalWeeks().reduce((s, h) => s + h.actual, 0);
 
   el.innerHTML = `
     <div class="mileage-prog-card">
-      ${historicalMi > 0 ? `<div class="hist-banner">+ <strong>${Math.round(historicalMi)}</strong> mi from before plan started (not counted toward compliance)</div>` : ''}
+      ${historicalMi > 0 ? `<div class="hist-banner">+ <strong>${Math.round(historicalMi)}</strong> mi backfilled from before plan started (not counted toward plan compliance)</div>` : ''}
+      ${renderPhaseRibbon()}
+      ${renderSparkline()}
       <div class="mileage-prog-stats">
         <div class="mp-stat">
-          <div class="num">${totalActual.toFixed(0)}</div>
+          <div class="num">${Math.round(totalActual)}</div>
           <div class="label">Actual mi</div>
           <div style="font-size:9px;color:var(--ink-faint);margin-top:1px;">in plan</div>
         </div>
         <div class="mp-stat">
-          <div class="num">${totalPlanned.toFixed(0)}</div>
+          <div class="num">${Math.round(totalPlanned)}</div>
           <div class="label">Planned mi</div>
           <div style="font-size:9px;color:var(--ink-faint);margin-top:1px;">to date</div>
         </div>
@@ -5052,11 +5380,7 @@ function renderMileageProgressionChart() {
           <div class="label">On track</div>
         </div>
       </div>
-      <div class="mileage-prog-chart">${bars}</div>
-      <div class="mileage-prog-legend">
-        <div class="item"><div class="swatch-actual"></div>Actual</div>
-        <div class="item"><div class="swatch-planned"></div>Planned</div>
-      </div>
+      ${renderRecentWeeksDetail()}
     </div>
   `;
 }
