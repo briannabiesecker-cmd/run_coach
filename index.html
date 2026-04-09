@@ -6101,10 +6101,12 @@ function renderRecentWeeksDetail() {
         tiles.push({
           label: 'Pre-plan',
           dateRange: formatWeekRange(h.wkStart),
-          planned: 0,
+          fullWeekPlanned: 0,
+          plannedToDate: 0,
           actual: h.actual,
           isCurrent: false,
-          isHistorical: true
+          isHistorical: true,
+          dayOfWeek: 7
         });
       }
     }
@@ -6115,7 +6117,11 @@ function renderRecentWeeksDetail() {
   tiles.reverse();
 
   const html = tiles.map(t => {
-    const pct = t.planned > 0 ? Math.round((t.actual / t.planned) * 100) : null;
+    // Pacing-vs-completion math:
+    // - Past weeks: pct = actual / fullWeekPlanned (closed-period completion)
+    // - Current week: pct = actual / plannedToDate (in-progress pacing)
+    const denom = t.plannedToDate;
+    const pct = denom > 0 ? Math.round((t.actual / denom) * 100) : null;
     let pctClass = '';
     if (pct != null) {
       if (pct > 110)      pctClass = 'over';
@@ -6141,21 +6147,26 @@ function renderRecentWeeksDetail() {
         </div>`;
     }
 
-    // Plan week rows
+    // Plan week rows — different label/denominator for in-progress vs closed
+    const metricLabel = t.isCurrent ? 'PACE' : 'COMPLETE';
+    const dayContext = t.isCurrent ? `Day ${t.dayOfWeek} of 7 · ` : '';
+    const milesDisplay = t.isCurrent
+      ? `${t.actual.toFixed(0)}<span class="planned-num"> of ${t.plannedToDate} (target ${t.fullWeekPlanned})</span> mi`
+      : `${t.actual.toFixed(0)}<span class="planned-num"> / ${t.fullWeekPlanned}</span> mi`;
     return `
       <div class="recent-week-row${t.isCurrent ? ' current' : ''}" ${onClick}>
         <div class="rwr-head">
           <div class="rwr-title">
             <span class="rwr-label">${escape(t.label)}${t.isCurrent ? ' · NOW' : ''}</span>
-            <span class="rwr-dates">${escape(t.dateRange)}</span>
+            <span class="rwr-dates">${dayContext}${escape(t.dateRange)}</span>
           </div>
-          <div class="rwr-miles">${t.actual.toFixed(0)}<span class="planned-num"> / ${t.planned}</span> mi</div>
+          <div class="rwr-miles">${milesDisplay}</div>
         </div>
         <div class="rwr-progress-wrap">
           <div class="rwr-progress-bar">
             <div class="rwr-progress-fill ${pctClass}" style="width:${fillPct}%"></div>
           </div>
-          <div class="rwr-pct ${pctClass}">${pct != null ? pct + '%' : '—'}</div>
+          <div class="rwr-pct ${pctClass}">${pct != null ? pct + '% ' + metricLabel : '—'}</div>
         </div>
       </div>`;
   }).join('');
