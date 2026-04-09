@@ -1377,6 +1377,57 @@
     margin-top: 2px;
   }
   .day-mini.rest .val { color: var(--ink-faint); }
+  .day-mini.today {
+    background: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .day-mini.today .label { color: #0a1628; opacity: 0.7; }
+  .day-mini.today .val { color: #0a1628; }
+  .day-mini.long-run {
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.4);
+  }
+  .day-mini.long-run.today { background: var(--accent); border-color: var(--accent); }
+
+  /* Long-run highlight on Home week strip */
+  .day-cell.long-run {
+    background: rgba(245,158,11,0.10);
+    border: 1px solid rgba(245,158,11,0.35);
+  }
+  .day-cell.long-run.today { background: var(--accent); border-color: var(--accent); }
+
+  /* Phase chip explainer popover */
+  .phase-popover {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-elev);
+    border: 1px solid var(--accent-border);
+    border-radius: 16px;
+    padding: 22px 22px 18px;
+    z-index: 1000;
+    max-width: 320px;
+    width: calc(100vw - 40px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .phase-popover .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .phase-popover .name { font-size: 18px; font-weight: 900; color: var(--ink); }
+  .phase-popover .body { font-size: 13px; color: var(--ink-mid); line-height: 1.55; }
+  .phase-popover .close-btn {
+    margin-top: 14px;
+    width: 100%;
+    background: var(--bg-elev-2);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 10px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .week-pill.tappable { cursor: pointer; }
+  .week-pill.tappable:hover { opacity: 0.85; }
 
   /* ─── Pace zones ───────────────────────────────── */
   .pace-grid {
@@ -2968,6 +3019,9 @@
 
     <!-- ─── PLAN TAB ─── -->
     <div id="tab-plan" class="tab">
+      <!-- Race countdown (mirrors Home tab) -->
+      <div id="plan-race-countdown"></div>
+
       <!-- Week navigator -->
       <div class="week-nav">
         <button class="week-nav-btn" onclick="navWeek(-1)">‹</button>
@@ -2979,24 +3033,38 @@
       <div class="week-progress-segments" id="week-progress-segments"></div>
       <div class="week-progress-label" id="week-progress-label">Workouts completed: 0 of 0</div>
 
-      <!-- Action buttons -->
+      <!-- Action buttons (trimmed: Plan overview + Edit week) -->
       <div class="plan-actions">
         <button class="plan-action" onclick="openPlanOverview()">
           <div class="plan-action-icon">📋</div>
           <div class="plan-action-label">Plan<br>overview</div>
         </button>
-        <button class="plan-action" onclick="openManualForm()">
-          <div class="plan-action-icon">+</div>
-          <div class="plan-action-label">Add<br>Workout</div>
+        <button class="plan-action" onclick="openEditWeekMenu()">
+          <div class="plan-action-icon">⚙</div>
+          <div class="plan-action-label">Edit<br>week</div>
         </button>
-        <button class="plan-action" onclick="openRearrangeWeek()">
-          <div class="plan-action-icon">📅</div>
-          <div class="plan-action-label">Rearrange<br>Week</div>
-        </button>
-        <button class="plan-action" onclick="openManagePlan()">
-          <div class="plan-action-icon">📝</div>
-          <div class="plan-action-label">Manage<br>Plan</div>
-        </button>
+      </div>
+
+      <!-- Edit-week modal (Add / Rearrange / Manage collapsed here) -->
+      <div id="edit-week-modal" class="modal-backdrop" onclick="if(event.target===this)closeEditWeekMenu()">
+        <div class="settings-modal-content">
+          <div class="settings-modal-title">Edit week</div>
+          <div class="settings-modal-list">
+            <button class="settings-item" onclick="closeEditWeekMenu();openManualForm();">
+              <span class="settings-icon">＋</span>
+              <span class="settings-text">Add a workout</span>
+            </button>
+            <button class="settings-item" onclick="closeEditWeekMenu();openRearrangeWeek();">
+              <span class="settings-icon">📅</span>
+              <span class="settings-text">Rearrange this week</span>
+            </button>
+            <button class="settings-item" onclick="closeEditWeekMenu();openManagePlan();">
+              <span class="settings-icon">📝</span>
+              <span class="settings-text">Manage plan</span>
+            </button>
+          </div>
+          <button class="btn-ghost" onclick="closeEditWeekMenu()" style="margin-top:14px;">Close</button>
+        </div>
       </div>
 
       <!-- Selected week detail -->
@@ -4140,6 +4208,12 @@ function openSettingsMenu() {
 function closeSettingsMenu() {
   document.getElementById('settings-modal').classList.remove('open');
 }
+function openEditWeekMenu() {
+  document.getElementById('edit-week-modal').classList.add('open');
+}
+function closeEditWeekMenu() {
+  document.getElementById('edit-week-modal').classList.remove('open');
+}
 
 function deleteLogEntry(date, type) {
   if (!confirm(`Delete this ${type} entry from ${date}?`)) return;
@@ -5209,6 +5283,26 @@ function renderCheckInCard(type, summary) {
     </div>`;
 }
 
+// Render the race-countdown hero into any element id (used by Home + Plan tabs)
+function renderRaceCountdownInto(elId) {
+  const raceEl = document.getElementById(elId);
+  if (!raceEl) return;
+  if (!plan || !plan.weeks || !plan.raceDate) { raceEl.innerHTML = ''; return; }
+  const days = daysBetween(todayISO(), plan.raceDate);
+  const totalDays = plan.weeks.length * 7;
+  const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
+  const dateLabel = new Date(plan.raceDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  raceEl.innerHTML = `
+    <div class="race-hero">
+      <div class="race-hero-name">${escape(plan.raceName || 'Your Race')}</div>
+      <div class="race-hero-row">
+        <div class="race-hero-days">${days}<span class="units">days</span></div>
+        <div class="race-hero-date">${escape(dateLabel)}</div>
+      </div>
+      <div class="race-hero-bar"><div class="race-hero-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+}
+
 // ─── HOME TAB ───
 function renderHome() {
   if (!plan || !plan.weeks) return;
@@ -5218,26 +5312,7 @@ function renderHome() {
   const today = week && week.days && week.days[dayIdx];
 
   // ─── Race countdown hero (top) ───
-  const raceEl = document.getElementById('race-countdown-hero');
-  if (raceEl) {
-    if (plan.raceDate) {
-      const days = daysBetween(todayISO(), plan.raceDate);
-      const totalDays = plan.weeks.length * 7;
-      const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
-      const dateLabel = new Date(plan.raceDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      raceEl.innerHTML = `
-        <div class="race-hero">
-          <div class="race-hero-name">${escape(plan.raceName || 'Your Race')}</div>
-          <div class="race-hero-row">
-            <div class="race-hero-days">${days}<span class="units">days</span></div>
-            <div class="race-hero-date">${escape(dateLabel)}</div>
-          </div>
-          <div class="race-hero-bar"><div class="race-hero-bar-fill" style="width:${pct}%"></div></div>
-        </div>`;
-    } else {
-      raceEl.innerHTML = '';
-    }
-  }
+  renderRaceCountdownInto('race-countdown-hero');
 
   // ─── Workout hero ───
   const heroEl = document.getElementById('workout-hero');
@@ -5480,6 +5555,9 @@ function renderPlan() {
   const wkIdx = getViewedWeekIdx();
   const week = weeks[wkIdx];
   if (!week) return;
+
+  // Race countdown header (mirrors Home tab)
+  renderRaceCountdownInto('plan-race-countdown');
 
   // Week nav title
   document.getElementById('week-nav-title').textContent = `Week ${week.week}${week.phase ? ' · ' + week.phase : ''}`;
