@@ -1096,6 +1096,73 @@
     text-align: right;
     margin-top: 10px;
   }
+  .proposed-changes {
+    background: rgba(99,102,241,0.08);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 12px;
+    padding: 14px;
+    margin-top: 14px;
+  }
+  .proposed-changes .label {
+    font-size: 11px;
+    font-weight: 800;
+    color: #818cf8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .proposed-changes .reasoning {
+    font-size: 13px;
+    color: var(--ink);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .proposed-changes .diff-line {
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .proposed-changes .diff-line .old {
+    color: var(--ink-light);
+    text-decoration: line-through;
+  }
+  .proposed-changes .diff-line .arrow {
+    color: var(--ink-faint);
+    margin: 0 8px;
+  }
+  .proposed-changes .diff-line .new {
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .proposed-changes .diff-focus {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-top: 4px;
+  }
+  .proposed-actions {
+    margin-top: 12px;
+  }
+  .proposed-applied {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(0,200,150,0.1);
+    border: 1px solid var(--accent-border);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .proposed-applied .check {
+    margin-right: 6px;
+  }
+  .proposed-declined {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--ink-light);
+    text-align: center;
+  }
 
   /* Intention card */
   .intention-card {
@@ -2679,6 +2746,21 @@ function gatherWeekData(weekIdx) {
     weeksOut: plan.weeks ? (plan.weeks.length - weekIdx - 1) : null
   };
 
+  // Next week's current plan (so AI can propose modifications)
+  const nextWeek = plan.weeks[weekIdx + 1] || null;
+  let nextWeekPayload = null;
+  if (nextWeek) {
+    nextWeekPayload = {
+      week: nextWeek.week,
+      phase: nextWeek.phase,
+      focus: nextWeek.focus,
+      totalMiles: nextWeek.totalMiles,
+      days: (nextWeek.days || []).map(d => ({
+        day: d.day, type: d.type, miles: d.miles || 0, note: d.note || ''
+      }))
+    };
+  }
+
   return {
     weekData: {
       week: week.week,
@@ -2688,7 +2770,8 @@ function gatherWeekData(weekIdx) {
     },
     dayLogs: dayLogs,
     wellnessAvg: wellnessAvg,
-    raceInfo: raceInfo
+    raceInfo: raceInfo,
+    nextWeek: nextWeekPayload
   };
 }
 
@@ -2737,6 +2820,40 @@ function persistWeeklyReviews() {
     data.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch(e) {}
+}
+
+function applyProposedChanges(reviewedWkIdx) {
+  const review = weeklyReviews[String(reviewedWkIdx)];
+  if (!review || !review.proposedChanges || !review.proposedChanges.applies) return;
+  const targetIdx = reviewedWkIdx + 1;
+  if (!plan.weeks[targetIdx]) {
+    alert('No next week to update.');
+    return;
+  }
+  const pc = review.proposedChanges;
+  // Apply: replace days, totalMiles, focus
+  if (pc.newDays && pc.newDays.length) {
+    plan.weeks[targetIdx].days = pc.newDays.map(d => ({
+      day: d.day, type: d.type, miles: parseFloat(d.miles) || 0, note: d.note || ''
+    }));
+  }
+  if (pc.newTotalMiles != null) plan.weeks[targetIdx].totalMiles = pc.newTotalMiles;
+  if (pc.newFocus) plan.weeks[targetIdx].focus = pc.newFocus;
+
+  // Mark applied
+  review.appliedAt = new Date().toISOString();
+  persistPlan();
+  persistWeeklyReviews();
+  renderDashboard();
+  alert('Plan updated for next week ✅');
+}
+
+function declineProposedChanges(reviewedWkIdx) {
+  const review = weeklyReviews[String(reviewedWkIdx)];
+  if (!review || !review.proposedChanges) return;
+  review.proposedChanges.declined = true;
+  persistWeeklyReviews();
+  renderPerformance();
 }
 
 // ════════════════════════════════════════════════════
@@ -4406,6 +4523,45 @@ function renderWeeklyReviewSection() {
     ? new Date(review.generatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : '';
 
+  // Proposed changes block
+  let proposedBlock = '';
+  const pc = review.proposedChanges;
+  if (pc && pc.applies) {
+    if (review.appliedAt) {
+      proposedBlock = `
+        <div class="proposed-applied">
+          <span class="check">✓</span> Plan adjustments applied to next week
+        </div>`;
+    } else if (pc.declined) {
+      proposedBlock = `
+        <div class="proposed-declined">
+          Suggested adjustments declined
+        </div>`;
+    } else {
+      const oldMiles = (plan.weeks && plan.weeks[wkIdx + 1]) ? plan.weeks[wkIdx + 1].totalMiles : 0;
+      const newMiles = pc.newTotalMiles || 0;
+      const diff = newMiles - oldMiles;
+      const diffText = diff === 0 ? 'no change'
+                      : diff > 0 ? `+${diff} mi`
+                      : `${diff} mi`;
+      proposedBlock = `
+        <div class="proposed-changes">
+          <div class="label">📋 Suggested adjustments to Week ${(plan.weeks[wkIdx + 1] && plan.weeks[wkIdx + 1].week) || '?'}</div>
+          <div class="reasoning">${escape(pc.reasoning || '')}</div>
+          <div class="diff-line">
+            <span class="old">Was ${oldMiles} mi</span>
+            <span class="arrow">→</span>
+            <span class="new">${newMiles} mi (${diffText})</span>
+          </div>
+          ${pc.newFocus ? `<div class="diff-focus">Focus: ${escape(pc.newFocus)}</div>` : ''}
+          <div class="proposed-actions">
+            <button class="btn-primary" onclick="applyProposedChanges(${wkIdx})">Apply changes</button>
+            <button class="btn-ghost" onclick="declineProposedChanges(${wkIdx})" style="margin-top:8px;">Decline</button>
+          </div>
+        </div>`;
+    }
+  }
+
   el.innerHTML = `
     <div class="review-card">
       <div class="review-week-tag">Week ${review.weekNumber || (wkIdx + 1)} Review</div>
@@ -4421,6 +4577,7 @@ function renderWeeklyReviewSection() {
           <span class="label">Next week</span>
           ${escape(review.recommendation)}
         </div>` : ''}
+      ${proposedBlock}
       <div class="review-meta">Generated ${generated}</div>
       <button class="btn-ghost" onclick="runWeeklyReview()" style="margin-top:10px;">Re-run review</button>
     </div>`;
