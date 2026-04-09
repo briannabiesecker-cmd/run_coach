@@ -3853,7 +3853,8 @@ function updateStatusPill() {
 }
 
 // ─── READINESS FLAG ───
-// Combines wellness ping + recent RPE + recent compliance + today's planned workout.
+// Weighted-score model: wellness alone is a soft signal, multiple converging
+// signals on a HARD day raise the alarm. Easy days basically can't go red.
 // Returns { status: 'green'|'yellow'|'red', message, suggestion, flags }
 function computeReadiness() {
   const today = todayISO();
@@ -3869,12 +3870,13 @@ function computeReadiness() {
   const dayIdx = getCurrentDayIndex();
   const week = plan && plan.weeks && plan.weeks[wkIdx];
   const todayWorkout = week && week.days && week.days[dayIdx];
-  const isHardToday = todayWorkout && ['Tempo', 'Intervals', 'Hill Repeats', 'Long'].indexOf(todayWorkout.type) !== -1;
+  const todayType = todayWorkout ? todayWorkout.type : '';
+  const isHardToday = ['Tempo', 'Intervals', 'Hill Repeats', 'Long'].indexOf(todayType) !== -1;
+  const isEasyToday = ['Easy', 'Strides', 'Cross', 'Rest'].indexOf(todayType) !== -1;
 
   // Last 7 days of run check-ins
   let recentRPEs = [];
   let recentSkipped = 0;
-  let recentDone = 0;
   for (let i = 1; i <= 7; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -3883,67 +3885,91 @@ function computeReadiness() {
     if (!ci) continue;
     if (ci.rpe) recentRPEs.push(ci.rpe);
     if (ci.status === 'skipped') recentSkipped++;
-    if (ci.status === 'done') recentDone++;
   }
   const avgRecentRPE = recentRPEs.length ? recentRPEs.reduce((a, b) => a + b, 0) / recentRPEs.length : 0;
 
+  // ─── WEIGHTED SCORING ───
+  // Each signal contributes points. Higher score = more concern.
+  // Wellness has LOWER weight because we have limited data (just 2 self-reports).
+  let score = 0;
   const flags = [];
-  let hardFlag = false;
 
-  // ─── HARD FLAGS (any one → red) ───
-  if (wellnessToday && wellnessToday.sleep && wellnessToday.sleep <= 4) {
-    flags.push({ type: 'hard', text: 'Sleep critically low (' + wellnessToday.sleep + '/10)' });
-    hardFlag = true;
-  }
-  if (wellnessToday && wellnessToday.soreness && wellnessToday.soreness >= 8) {
-    flags.push({ type: 'hard', text: 'Soreness very high (' + wellnessToday.soreness + '/10)' });
-    hardFlag = true;
-  }
-  if (yesterdayCI && yesterdayCI.rpe >= 9 && isHardToday) {
-    flags.push({ type: 'hard', text: 'Yesterday was max effort (RPE ' + yesterdayCI.rpe + ')' });
-    hardFlag = true;
-  }
-  if (recentSkipped >= 3 && isHardToday) {
-    flags.push({ type: 'hard', text: recentSkipped + ' missed runs this week' });
-    hardFlag = true;
-  }
-
-  // ─── SOFT FLAGS (2+ → yellow on hard day, 3+ → red) ───
-  if (wellnessToday && wellnessToday.sleep && wellnessToday.sleep <= 6 && wellnessToday.sleep > 4) {
-    flags.push({ type: 'soft', text: 'Sleep below 7 (' + wellnessToday.sleep + '/10)' });
-  }
-  if (wellnessToday && wellnessToday.soreness && wellnessToday.soreness >= 6 && wellnessToday.soreness < 8) {
-    flags.push({ type: 'soft', text: 'Soreness elevated (' + wellnessToday.soreness + '/10)' });
-  }
-  if (yesterdayCI && yesterdayCI.rpe && yesterdayCI.rpe >= 8 && yesterdayCI.rpe < 9) {
-    flags.push({ type: 'soft', text: 'Yesterday was hard (RPE ' + yesterdayCI.rpe + ')' });
-  }
-  if (avgRecentRPE >= 7 && recentRPEs.length >= 3) {
-    flags.push({ type: 'soft', text: 'RPE trending high (avg ' + avgRecentRPE.toFixed(1) + ')' });
-  }
-  if (recentSkipped >= 2 && !hardFlag) {
-    flags.push({ type: 'soft', text: recentSkipped + ' missed runs recently' });
+  // Wellness — soft input (low weight)
+  if (wellnessToday) {
+    if (wellnessToday.sleep) {
+      if (wellnessToday.sleep <= 4) {
+        score += 1.5;
+        flags.push('Sleep low (' + wellnessToday.sleep + '/10)');
+      } else if (wellnessToday.sleep <= 6) {
+        score += 0.5;
+        flags.push('Sleep below 7 (' + wellnessToday.sleep + '/10)');
+      }
+    }
+    if (wellnessToday.soreness) {
+      if (wellnessToday.soreness >= 8) {
+        score += 1.5;
+        flags.push('Soreness high (' + wellnessToday.soreness + '/10)');
+      } else if (wellnessToday.soreness >= 6) {
+        score += 0.5;
+        flags.push('Soreness elevated (' + wellnessToday.soreness + '/10)');
+      }
+    }
   }
 
-  const softCount = flags.filter(f => f.type === 'soft').length;
+  // Yesterday's effort — moderate weight
+  if (yesterdayCI && yesterdayCI.rpe) {
+    if (yesterdayCI.rpe >= 9) {
+      score += 1.5;
+      flags.push('Yesterday max effort (RPE ' + yesterdayCI.rpe + ')');
+    } else if (yesterdayCI.rpe >= 8) {
+      score += 1;
+      flags.push('Yesterday was hard (RPE ' + yesterdayCI.rpe + ')');
+    }
+  }
+
+  // Recent RPE trend — moderate weight (real pattern)
+  if (avgRecentRPE >= 8 && recentRPEs.length >= 3) {
+    score += 1.5;
+    flags.push('RPE trending high (avg ' + avgRecentRPE.toFixed(1) + ')');
+  } else if (avgRecentRPE >= 7 && recentRPEs.length >= 3) {
+    score += 0.5;
+    flags.push('Recent RPE elevated (avg ' + avgRecentRPE.toFixed(1) + ')');
+  }
+
+  // Skipped runs — soft signal
+  if (recentSkipped >= 3) {
+    score += 1;
+    flags.push(recentSkipped + ' missed runs this week');
+  } else if (recentSkipped >= 2) {
+    score += 0.5;
+    flags.push(recentSkipped + ' missed runs recently');
+  }
+
+  // ─── WORKOUT-TYPE MODIFIER ───
+  // Easy/rest/cross days basically can't go red — you can run easy when tired.
+  // Hard days amplify the score because the cost of pushing through fatigue is higher.
+  let adjustedScore = score;
+  if (isEasyToday)      adjustedScore = score * 0.5;
+  else if (isHardToday) adjustedScore = score * 1.2;
 
   let status, message, suggestion;
-  if (hardFlag || softCount >= 3) {
+
+  if (adjustedScore >= 4 && isHardToday) {
     status = 'red';
-    message = 'Pull back today';
-    suggestion = isHardToday
-      ? `Multiple flags + today is ${todayWorkout.type}. Swap for Easy or Rest.`
-      : 'Take it very easy or rest fully. Recovery is training.';
-  } else if (softCount >= 2) {
-    status = 'yellow';
-    message = 'Caution';
-    suggestion = isHardToday
-      ? `Several soft signals. Consider easing today's ${todayWorkout.type}.`
-      : 'Listen to your body — easy effort is fine.';
-  } else if (softCount === 1) {
+    message = 'Pull back';
+    suggestion = `Multiple recovery flags on a ${todayType} day. Consider swapping to Easy or Rest.`;
+  } else if (adjustedScore >= 2.5) {
     status = 'yellow';
     message = 'Heads up';
-    suggestion = flags[0].text + '. Proceed mindfully.';
+    suggestion = isHardToday
+      ? `Several signals. Consider easing today's ${todayType}.`
+      : isEasyToday
+        ? `Easy effort is fine — listen to your body.`
+        : `Proceed mindfully today.`;
+  } else if (adjustedScore >= 1 && flags.length > 0) {
+    status = 'green';
+    message = 'Cleared (note)';
+    suggestion = flags[0] + '. You\'re good — just be aware.';
   } else {
     status = 'green';
     message = wellnessToday ? 'Cleared to train' : 'Log wellness for full read';
