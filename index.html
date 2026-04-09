@@ -568,6 +568,12 @@
     font-weight: 700;
     text-transform: uppercase;
   }
+  .rwt-dates {
+    font-size: 9px;
+    color: var(--ink-faint);
+    margin-top: 1px;
+    white-space: nowrap;
+  }
   .rwt-bars {
     display: flex;
     gap: 3px;
@@ -5274,32 +5280,49 @@ function renderSparkline() {
     </div>`;
 }
 
+// Format a week's date range as "Mar 31 – Apr 6"
+function formatWeekRange(startISO) {
+  const d1 = new Date(startISO + 'T00:00:00');
+  const d2 = new Date(d1);
+  d2.setDate(d2.getDate() + 6);
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(d1)}–${fmt(d2)}`;
+}
+
 function renderRecentWeeksDetail() {
   if (!plan || !plan.weeks) return '';
   const currentIdx = getCurrentWeekIndex();
-  const histWeeks = getHistoricalWeeks(); // backfilled history
-  // Build a list of "candidates" for the recent 4 (newest right): include up to current + maybe peek 1 ahead
-  // We want: 4 tiles ending at current week
+  const histWeeks = getHistoricalWeeks();
+
   const tiles = [];
   for (let offset = -3; offset <= 0; offset++) {
     const wkIdx = currentIdx + offset;
     if (wkIdx >= 0 && wkIdx < plan.weeks.length) {
       const w = plan.weeks[wkIdx];
+      // Compute the calendar date range for this plan week
+      let dateRange = '';
+      if (planStartDate) {
+        const start = new Date(planStartDate + 'T00:00:00');
+        start.setDate(start.getDate() + wkIdx * 7);
+        dateRange = formatWeekRange(start.toISOString().slice(0, 10));
+      }
       tiles.push({
         wkIdx,
         label: `Wk ${w.week}`,
+        dateRange,
         planned: w.totalMiles || 0,
         actual: actualMilesForWeek(wkIdx),
         isCurrent: offset === 0,
         isHistorical: false
       });
     } else if (wkIdx < 0 && histWeeks.length >= -wkIdx) {
-      // Pull from historical weeks
-      const histIdx = histWeeks.length + wkIdx; // wkIdx is negative
+      // Pull from historical weeks (counted from oldest → newest)
+      const histIdx = histWeeks.length + wkIdx;
       if (histIdx >= 0) {
         const h = histWeeks[histIdx];
         tiles.push({
           label: 'Pre-plan',
+          dateRange: formatWeekRange(h.wkStart),
           planned: 0,
           actual: h.actual,
           isCurrent: false,
@@ -5322,6 +5345,7 @@ function renderRecentWeeksDetail() {
     return `
       <div class="recent-week-tile${t.isCurrent ? ' current' : ''}" ${onClick}>
         <div class="rwt-label">${escape(t.label)}</div>
+        <div class="rwt-dates">${escape(t.dateRange)}</div>
         <div class="rwt-bars">
           ${plannedBar}
           <div class="rwt-bar actual${actualClass}" style="height:${actualH}px;"></div>
