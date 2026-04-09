@@ -11,10 +11,20 @@
 var GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Fetch Gemini with automatic retry on transient infrastructure errors.
-// Gemini regularly returns 503 ("UNAVAILABLE - high demand"), 429
-// (rate limit), and occasionally 500 — these are not bugs in our code,
-// just Google's free tier under load. We retry up to 3 times with
-// exponential backoff (2s, 4s, 8s) before surfacing the error.
+// Handles two distinct error modes from Google's free tier:
+//
+//   503 UNAVAILABLE — model is overloaded ("high demand")
+//                     → exponential backoff (2s, 4s, 8s)
+//
+//   429 RESOURCE_EXHAUSTED — per-minute rate limit hit. The error body
+//                            includes a hint like "Please retry in 3.5s".
+//                            We parse it and respect Google's suggested
+//                            wait time (capped at 60s to avoid hanging
+//                            on the daily quota where retry-in is large).
+//
+//   500 — generic server error, treated like 503.
+//
+// Up to 3 attempts before surfacing the error to the user.
 function fetchGeminiWithRetry(url, payload) {
   var maxAttempts = 3;
   var lastResponse = null;
@@ -30,10 +40,29 @@ function fetchGeminiWithRetry(url, payload) {
     lastResponse = response;
     // Retry only on transient infrastructure errors
     if (code !== 503 && code !== 429 && code !== 500) return response;
-    if (attempt < maxAttempts) {
-      // Exponential backoff: 2s, 4s, 8s
-      Utilities.sleep(Math.pow(2, attempt) * 1000);
+    if (attempt >= maxAttempts) break;
+
+    // Decide how long to wait before the next attempt
+    var sleepMs;
+    if (code === 429) {
+      // Parse "Please retry in 3.517413724s" from the response body
+      var body = response.getContentText();
+      var match = body.match(/retry in ([\d.]+)s/i);
+      if (match) {
+        // Round up + 500ms buffer to make sure the throttle window has elapsed
+        sleepMs = Math.ceil(parseFloat(match[1]) * 1000) + 500;
+        // Cap: if the API suggests > 60s, that's the daily quota — no
+        // amount of in-request waiting will fix that, surface the error.
+        if (sleepMs > 60000) return response;
+      } else {
+        // Fallback if the body shape changes — wait 5s
+        sleepMs = 5000;
+      }
+    } else {
+      // 503/500 — exponential backoff
+      sleepMs = Math.pow(2, attempt) * 1000;
     }
+    Utilities.sleep(sleepMs);
   }
   return lastResponse;
 }
