@@ -594,6 +594,140 @@
     margin-top: 2px;
   }
 
+  /* Check-in cards */
+  .checkin-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .checkin-card.done {
+    background: rgba(0,200,150,0.06);
+    border-color: rgba(0,200,150,0.3);
+  }
+  .checkin-card.skipped {
+    background: rgba(239,68,68,0.06);
+    border-color: rgba(239,68,68,0.3);
+  }
+  .checkin-card.modified {
+    background: rgba(250,204,21,0.06);
+    border-color: rgba(250,204,21,0.3);
+  }
+  .checkin-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .checkin-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .checkin-status {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
+  }
+  .checkin-summary {
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .checkin-meta {
+    font-size: 12px;
+    color: var(--ink-light);
+  }
+  .checkin-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .status-btn {
+    flex: 1;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--ink-mid);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 6px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .status-btn:hover { color: var(--ink); border-color: var(--border-strong); }
+  .status-btn.active.done     { background: rgba(0,200,150,0.15); border-color: var(--accent); color: var(--accent); }
+  .status-btn.active.skipped  { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #fca5a5; }
+  .status-btn.active.modified { background: rgba(250,204,21,0.15); border-color: #facc15; color: #facc15; }
+  .rpe-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .rpe-dot {
+    flex: 1;
+    height: 28px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--ink-light);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  .rpe-dot:hover { color: var(--ink); }
+  .rpe-dot.active { background: var(--accent); color: #0a1628; border-color: var(--accent); }
+  .rpe-row .rpe-label {
+    font-size: 10px;
+    color: var(--ink-light);
+    align-self: center;
+    width: 24px;
+  }
+  .checkin-note-input {
+    width: 100%;
+    margin-top: 10px;
+    font-size: 13px;
+    padding: 8px 12px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--ink);
+    font-family: inherit;
+  }
+  .checkin-save {
+    width: 100%;
+    margin-top: 10px;
+    background: var(--accent);
+    color: #0a1628;
+    border: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .checkin-save:disabled { opacity: 0.4; cursor: not-allowed; }
+  .checkin-edit-link {
+    background: none;
+    border: none;
+    color: var(--ink-light);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+  }
+
   /* Today's strength card */
   .strength-today-card {
     background: rgba(168,85,247,0.08);
@@ -910,6 +1044,7 @@
         <div class="day-strip" id="day-strip"></div>
       </div>
 
+      <div id="run-checkin-section"></div>
       <div id="strength-today-section"></div>
 
       <div class="section-label">Race Countdown</div>
@@ -1025,8 +1160,11 @@ let uploadedFiles = [];   // [{ name, base64 }]
 let strengthSchedule = [];// [{ day: "Wed", time: "08:00", label: "Lower body" }]
 let strengthDraft = [];   // working copy while editing
 let prevView = 'dashboard'; // for cancel-strength-edit return path
+let checkIns = {};        // { "YYYY-MM-DD": { run: {status,rpe,note}, strength: {status,rpe,note} } }
 
 const DAYS_FULL = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const STATUS_LABELS = { done: '✓ Done', skipped: '✗ Skipped', modified: '⚙ Modified' };
+const STATUS_COLORS = { done: '#00C896', skipped: '#ef4444', modified: '#facc15' };
 
 // ════════════════════════════════════════════════════
 // HELPERS
@@ -1232,7 +1370,8 @@ function savePlan(p) {
     plan: p,
     planStartDate: todayISO(),
     savedAt: new Date().toISOString(),
-    strengthSchedule: strengthSchedule
+    strengthSchedule: strengthSchedule,
+    checkIns: checkIns
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
@@ -1247,16 +1386,83 @@ function loadPlan() {
     plan = data.plan;
     planStartDate = data.planStartDate;
     strengthSchedule = data.strengthSchedule || [];
+    checkIns = data.checkIns || {};
     return true;
   } catch(e) { return false; }
 }
 
+// ════════════════════════════════════════════════════
+// CHECK-INS
+// ════════════════════════════════════════════════════
+function getCheckIn(dateISO, type) {
+  return (checkIns[dateISO] && checkIns[dateISO][type]) || null;
+}
+
+function saveCheckIn(dateISO, type, data) {
+  if (!checkIns[dateISO]) checkIns[dateISO] = {};
+  checkIns[dateISO][type] = data;
+  // Persist immediately by updating the storage payload
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : { plan, planStartDate, strengthSchedule };
+    payload.checkIns = checkIns;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+}
+
+// In-memory state for the check-in form (one row at a time)
+let checkInForm = { type: null, status: null, rpe: null, note: '' };
+
+function openCheckInForm(type, existing) {
+  checkInForm = {
+    type,
+    status: existing ? existing.status : null,
+    rpe: existing ? existing.rpe : null,
+    note: existing ? (existing.note || '') : ''
+  };
+  renderHome(); // re-render with form open
+}
+
+function selectStatus(status) {
+  checkInForm.status = status;
+  renderHome();
+}
+
+function selectRPE(rpe) {
+  checkInForm.rpe = rpe;
+  renderHome();
+}
+
+function updateCheckInNote(value) {
+  checkInForm.note = value;
+}
+
+function submitCheckIn() {
+  if (!checkInForm.status) return;
+  const data = {
+    status: checkInForm.status,
+    rpe: checkInForm.rpe,
+    note: checkInForm.note,
+    loggedAt: new Date().toISOString()
+  };
+  saveCheckIn(todayISO(), checkInForm.type, data);
+  checkInForm = { type: null, status: null, rpe: null, note: '' };
+  renderHome();
+}
+
+function cancelCheckIn() {
+  checkInForm = { type: null, status: null, rpe: null, note: '' };
+  renderHome();
+}
+
 function resetPlan() {
-  if (!confirm('Start a new plan? This will erase your current plan and strength schedule.')) return;
+  if (!confirm('Start a new plan? This will erase your current plan, strength schedule, and check-ins.')) return;
   localStorage.removeItem(STORAGE_KEY);
   plan = null;
   planStartDate = null;
   strengthSchedule = [];
+  checkIns = {};
   uploadedFiles = [];
   confirmedRace = null;
   document.getElementById('file-list').innerHTML = '';
@@ -1469,6 +1675,68 @@ function updateStatusPill() {
   document.getElementById('status-pill').textContent = `Wk ${wkNum}${phase ? ' · ' + phase : ''}`;
 }
 
+// ─── CHECK-IN CARD ───
+// type: 'run' | 'strength'
+// summary: short text describing today's workout
+function renderCheckInCard(type, summary) {
+  const today = todayISO();
+  const existing = getCheckIn(today, type);
+  const isOpen = checkInForm.type === type;
+
+  // Closed state — already logged
+  if (existing && !isOpen) {
+    const status = existing.status;
+    const statusLabel = STATUS_LABELS[status] || status;
+    const statusColor = STATUS_COLORS[status] || 'var(--ink-light)';
+    const rpeText = existing.rpe ? ` · RPE ${existing.rpe}/10` : '';
+    const noteText = existing.note ? `<div class="checkin-meta">"${escape(existing.note)}"</div>` : '';
+    return `
+      <div class="checkin-card ${status}">
+        <div class="checkin-head">
+          <div class="checkin-summary">${summary}</div>
+          <div class="checkin-status" style="background:${statusColor}22;color:${statusColor}">${statusLabel}</div>
+        </div>
+        ${rpeText ? `<div class="checkin-meta">${rpeText.slice(3)}</div>` : ''}
+        ${noteText}
+        <button class="checkin-edit-link" onclick="openCheckInForm('${type}', ${JSON.stringify(existing).replace(/"/g, '&quot;')})">Edit</button>
+      </div>`;
+  }
+
+  // Closed state — not yet logged
+  if (!isOpen) {
+    return `
+      <div class="checkin-card">
+        <div class="checkin-summary">${summary}</div>
+        <div class="checkin-meta">Tap to log when complete</div>
+        <button class="checkin-save" onclick="openCheckInForm('${type}')">Log workout</button>
+      </div>`;
+  }
+
+  // Open form
+  const statuses = ['done', 'skipped', 'modified'];
+  const statusBtns = statuses.map(s => {
+    const active = checkInForm.status === s ? `active ${s}` : '';
+    return `<button class="status-btn ${active}" onclick="selectStatus('${s}')">${STATUS_LABELS[s]}</button>`;
+  }).join('');
+
+  const rpeBtns = [];
+  for (let i = 1; i <= 10; i++) {
+    const active = checkInForm.rpe === i ? 'active' : '';
+    rpeBtns.push(`<div class="rpe-dot ${active}" onclick="selectRPE(${i})">${i}</div>`);
+  }
+
+  return `
+    <div class="checkin-card">
+      <div class="checkin-summary">${summary}</div>
+      <div class="checkin-actions">${statusBtns}</div>
+      <div style="font-size:11px;color:var(--ink-light);margin-top:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">RPE — how hard?</div>
+      <div class="rpe-row">${rpeBtns.join('')}</div>
+      <input type="text" class="checkin-note-input" id="checkin-note-${type}" placeholder="Optional note (e.g. legs felt heavy)" value="${escape(checkInForm.note || '')}" oninput="updateCheckInNote(this.value)" />
+      <button class="checkin-save" onclick="submitCheckIn()" ${!checkInForm.status ? 'disabled' : ''}>Save</button>
+      <button class="checkin-edit-link" style="display:block;margin:8px auto 0;" onclick="cancelCheckIn()">Cancel</button>
+    </div>`;
+}
+
 // ─── HOME TAB ───
 function renderHome() {
   const wkIdx = getCurrentWeekIndex();
@@ -1519,18 +1787,24 @@ function renderHome() {
     });
   }
 
+  // Run check-in section (only if today has a non-Rest run)
+  const runCheckInEl = document.getElementById('run-checkin-section');
+  if (today && today.type && today.type !== 'Rest') {
+    const summary = `${TYPE_ICONS[today.type] || '🏃'} ${today.type}${today.miles ? ' · ' + today.miles + ' mi' : ''}`;
+    runCheckInEl.innerHTML = '<div class="section-label">Today\'s Run</div>' +
+      renderCheckInCard('run', summary);
+  } else {
+    runCheckInEl.innerHTML = '';
+  }
+
   // Today's strength card (only if a session is scheduled today)
   const todayShort = DAYS_FULL[dayIdx];
   const todayStrength = getStrengthForDay(todayShort);
   const strSection = document.getElementById('strength-today-section');
   if (todayStrength.length) {
+    const strSummary = todayStrength.map(s => `💪 ${escape(s.time)} ${escape(s.label || 'Strength')}`).join(' · ');
     strSection.innerHTML = '<div class="section-label">Today\'s Strength</div>' +
-      todayStrength.map(s => `
-        <div class="strength-today-card">
-          <div class="strength-today-time">💪 ${escape(s.time)}</div>
-          <div class="strength-today-label">${escape(s.label || 'Strength session')}</div>
-        </div>
-      `).join('');
+      renderCheckInCard('strength', strSummary);
   } else {
     strSection.innerHTML = '';
   }
