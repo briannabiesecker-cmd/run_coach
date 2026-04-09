@@ -637,6 +637,40 @@
     color: var(--ink);
     margin-top: 2px;
   }
+  .pace-card .pace-reason {
+    font-size: 10px;
+    color: var(--ink-light);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Holistic guidance cards */
+  .holistic-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .holistic-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .holistic-icon { font-size: 16px; }
+  .holistic-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+  }
+  .holistic-body {
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
 
   /* ─── Phase rows ───────────────────────────────── */
   .phase-row {
@@ -2183,6 +2217,9 @@
       <div class="section-label" style="margin-top:16px;">Pace Zones</div>
       <div class="pace-grid" id="pace-zones"></div>
 
+      <div class="section-label" style="margin-top:16px;">Coach's Holistic Tips</div>
+      <div id="holistic-section"></div>
+
       <div class="section-label" style="margin-top:16px;">Plan Phases</div>
       <div id="phase-list"></div>
 
@@ -2278,6 +2315,8 @@ const TYPE_ICONS = {
   'Long': '🛣️',
   'Tempo': '⚡',
   'Intervals': '🔥',
+  'Hill Repeats': '⛰️',
+  'Strides': '💨',
   'Rest': '💤',
   'Cross': '🧘',
 };
@@ -3739,6 +3778,16 @@ const INTENTION_LIB = {
     feel: 'Very hard during work intervals, very easy during recovery. The recovery should bring you almost back to normal.',
     tip: 'Warm up well — at least 1.5 mi easy. Hit consistent pace across reps. The first one shouldn\'t be the fastest.'
   },
+  'Hill Repeats': {
+    purpose: 'Build leg strength, power, and form efficiency without the impact of pure speedwork. Counts as a quality day for recovery purposes.',
+    feel: 'Hard up, easy jog or walk down. Work intervals are short (60-90 sec), recovery should be near-complete.',
+    tip: 'Find a moderate hill — not too steep. Drive arms, lift knees, stay tall. Don\'t race the watch on the way up.'
+  },
+  'Strides': {
+    purpose: 'Quick, relaxed accelerations to wake up fast-twitch fibers and refine running form. Add to the end of an easy run.',
+    feel: 'Smooth and fast — about 90% effort, NOT a sprint. Feel light and bouncy.',
+    tip: '20 seconds each, 4-6 of them, full recovery (60+ sec walk) between. Focus on form, not pace.'
+  },
   'Cross': {
     purpose: 'Aerobic stimulus without impact. Active recovery that maintains fitness while letting running muscles repair.',
     feel: 'Easy to moderate effort. You\'re recovering, not racing.',
@@ -3751,12 +3800,26 @@ const INTENTION_LIB = {
   }
 };
 
+// Pace zones may be either a string (legacy) or {value, reason} (new schema).
+// Return the display string regardless.
+function paceZoneValue(z) {
+  if (!z) return '';
+  if (typeof z === 'string') return z;
+  if (typeof z === 'object' && z.value) return z.value;
+  return '';
+}
+
+function paceZoneReason(z) {
+  if (!z || typeof z !== 'object') return '';
+  return z.reason || '';
+}
+
 function getPaceForWorkout(type) {
   if (!plan || !plan.paceZones) return '';
   const pz = plan.paceZones;
-  if (type === 'Easy' || type === 'Long') return pz.easy || '';
-  if (type === 'Tempo') return pz.tempo || pz.marathon || '';
-  if (type === 'Intervals') return pz.interval || '';
+  if (type === 'Easy' || type === 'Long') return paceZoneValue(pz.easy);
+  if (type === 'Tempo') return paceZoneValue(pz.tempo) || paceZoneValue(pz.marathon);
+  if (type === 'Intervals') return paceZoneValue(pz.interval);
   return '';
 }
 
@@ -4666,11 +4729,33 @@ function renderMileageProgressionChart() {
   `;
 }
 
+function renderHolisticGuidance() {
+  const el = document.getElementById('holistic-section');
+  if (!el) return;
+  const hg = plan && plan.holisticGuidance;
+  if (!hg) {
+    el.innerHTML = '<div class="empty" style="font-size:11px;padding:12px;">Generate a new plan to see holistic coaching tips.</div>';
+    return;
+  }
+  const items = [
+    { icon: '🛌', label: 'Recovery',  text: hg.recovery },
+    { icon: '💪', label: 'Strength',  text: hg.strength },
+    { icon: '🥗', label: 'Nutrition', text: hg.nutrition },
+    { icon: '🏁', label: 'Race Day',  text: hg.raceDay }
+  ];
+  el.innerHTML = items.filter(i => i.text).map(i => `
+    <div class="holistic-card">
+      <div class="holistic-head"><span class="holistic-icon">${i.icon}</span><span class="holistic-label">${i.label}</span></div>
+      <div class="holistic-body">${escape(i.text)}</div>
+    </div>
+  `).join('') || '<div class="empty" style="font-size:11px;padding:12px;">No tips yet.</div>';
+}
+
 function renderPerformance() {
   renderMileageProgressionChart();
   renderWeeklyReviewSection();
 
-  // Pace zones
+  // Pace zones (value + optional reason)
   const pz = plan.paceZones || {};
   const zones = [
     { key: 'easy',     label: 'Easy' },
@@ -4678,9 +4763,18 @@ function renderPerformance() {
     { key: 'tempo',    label: 'Tempo' },
     { key: 'interval', label: 'Interval' },
   ];
-  document.getElementById('pace-zones').innerHTML = zones.filter(z => pz[z.key]).map(z =>
-    `<div class="pace-card"><div class="label">${z.label}</div><div class="value">${escape(pz[z.key])}</div></div>`
-  ).join('') || '<div class="empty" style="grid-column:1/-1;">No pace zones</div>';
+  document.getElementById('pace-zones').innerHTML = zones.filter(z => pz[z.key]).map(z => {
+    const val = paceZoneValue(pz[z.key]);
+    const reason = paceZoneReason(pz[z.key]);
+    return `<div class="pace-card">
+      <div class="label">${z.label}</div>
+      <div class="value">${escape(val)}</div>
+      ${reason ? `<div class="pace-reason">${escape(reason)}</div>` : ''}
+    </div>`;
+  }).join('') || '<div class="empty" style="grid-column:1/-1;">No pace zones</div>';
+
+  // Holistic guidance section
+  renderHolisticGuidance();
 
   // Phases
   const wkIdx = getCurrentWeekIndex();

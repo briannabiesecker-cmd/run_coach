@@ -327,6 +327,7 @@ function weeklyReview(params) {
   var dayLogs     = params.dayLogs     || [];   // [{ day, plannedType, plannedMiles, status, rpe, note }]
   var wellnessAvg = params.wellnessAvg || null; // { sleep, soreness, daysLogged }
   var raceInfo    = params.raceInfo    || {};   // { name, date, distance, goalTime, weeksOut }
+  var nextWeek    = params.nextWeek    || null; // { week, phase, focus, totalMiles, days } — current plan for next week
   var coachingStyle = params.coachingStyle || 'encouraging';
 
   var systemPrompt = [
@@ -395,6 +396,19 @@ function weeklyReview(params) {
     lines.push('');
   }
 
+  // Next week's CURRENT plan (what AI may modify)
+  if (nextWeek) {
+    lines.push('NEXT WEEK CURRENTLY PLANNED (Week ' + (nextWeek.week || '?') + '):');
+    lines.push('- Total: ' + (nextWeek.totalMiles || 0) + ' miles');
+    if (nextWeek.focus) lines.push('- Focus: ' + nextWeek.focus);
+    if (nextWeek.days && nextWeek.days.length) {
+      nextWeek.days.forEach(function(d) {
+        lines.push('  · ' + d.day + ': ' + d.type + (d.miles ? ' ' + d.miles + ' mi' : '') + (d.note ? ' — ' + d.note : ''));
+      });
+    }
+    lines.push('');
+  }
+
   lines.push('Return ONLY valid JSON in this exact structure:');
   lines.push('{');
   lines.push('  "summary": "1-2 sentence honest assessment of how the week went",');
@@ -402,14 +416,31 @@ function weeklyReview(params) {
   lines.push('  "observations": [');
   lines.push('    {"icon": "✅"|"⚠️"|"💤"|"💪"|"📈"|"🎯", "text": "specific observation about this week"}');
   lines.push('  ],');
-  lines.push('  "recommendation": "1-2 sentence specific direction for next week"');
+  lines.push('  "recommendation": "1-2 sentence specific direction for next week",');
+  lines.push('  "proposedChanges": {');
+  lines.push('    "applies": true | false,');
+  lines.push('    "reasoning": "1 sentence why these specific changes",');
+  lines.push('    "newTotalMiles": number,');
+  lines.push('    "newFocus": "string",');
+  lines.push('    "newDays": [');
+  lines.push('      {"day": "Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat"|"Sun", "type": "Easy"|"Long"|"Tempo"|"Intervals"|"Rest"|"Cross", "miles": number, "note": "string"}');
+  lines.push('    ]');
+  lines.push('  }');
   lines.push('}');
   lines.push('');
-  lines.push('Rules:');
-  lines.push('- 3 to 5 observations max.');
-  lines.push('- Make observations actionable, not generic.');
-  lines.push('- The recommendation should be specific (e.g. "hold mileage at X" not "keep training").');
-  lines.push('- Return JSON only, no markdown fences.');
+  lines.push('Rules for review:');
+  lines.push('- 3 to 5 observations max. Actionable, not generic.');
+  lines.push('- Recommendation should be specific.');
+  lines.push('');
+  lines.push('Rules for proposedChanges:');
+  lines.push('- Set applies=true ONLY if changes are warranted (compliance < 70%, RPE pattern high, wellness flags, or major substitutions).');
+  lines.push('- If the runner executed well (compliance ≥ 80%, RPE in expected range), set applies=false. Don\'t change a working plan.');
+  lines.push('- When applies=true: return ALL 7 days for next week (Mon through Sun) with the new plan.');
+  lines.push('- Common adjustments: hold mileage flat (compliance < 70%), reduce 10-15% (red flags), drop a quality session (high RPE pattern).');
+  lines.push('- Keep the same workout types when possible. Adjust volume more often than swap workouts.');
+  lines.push('- newTotalMiles must equal the sum of newDays.miles.');
+  lines.push('');
+  lines.push('Return JSON only, no markdown fences.');
 
   var userPrompt = lines.join('\n');
 
