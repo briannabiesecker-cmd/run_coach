@@ -61,6 +61,10 @@ function doPost(e) {
       var auth = checkPasscode(body.passcode);
       if (!auth.ok) { result = { error: auth.error }; }
       else { result = coach(body); }
+    } else if (action === 'lookupRace') {
+      var auth2 = checkPasscode(body.passcode);
+      if (!auth2.ok) { result = { error: auth2.error }; }
+      else { result = lookupRace(body); }
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -153,6 +157,79 @@ function coach(params) {
   try { parsed = JSON.parse(text); } catch(e) { parsed = { raw: text }; }
 
   return { success: true, result: parsed };
+}
+
+// ──────────────────────────────────────────────────
+// Race lookup: ask Gemini to identify a race by name
+// and return structured info for user confirmation.
+// ──────────────────────────────────────────────────
+function lookupRace(params) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return { error: 'GEMINI_API_KEY not set in script properties.' };
+
+  var raceName = (params.raceName || '').trim();
+  if (!raceName) return { error: 'raceName is required.' };
+
+  var thisYear = new Date().getFullYear();
+  var nextYear = thisYear + 1;
+
+  var systemPrompt = 'You identify running races by name and return structured JSON. ' +
+    'You know major races worldwide (Boston, NYC, Chicago, Berlin, London, Tokyo, Richmond, Marine Corps, etc.) ' +
+    'and many smaller annual races.';
+
+  var userPrompt = [
+    'Identify this race: "' + raceName + '"',
+    '',
+    'The current year is ' + thisYear + '. The runner wants information for the upcoming edition (' + thisYear + ' or ' + nextYear + ').',
+    '',
+    'Return ONLY valid JSON in this exact structure:',
+    '{',
+    '  "found": true,',
+    '  "name": "Full official race name",',
+    '  "date": "YYYY-MM-DD",',
+    '  "location": "City, State/Country",',
+    '  "distance": "5K" | "10K" | "Half Marathon" | "Marathon" | "Other",',
+    '  "confidence": "high" | "medium" | "low",',
+    '  "notes": "brief context if helpful"',
+    '}',
+    '',
+    'Rules:',
+    '- If you do not recognize the race, return { "found": false }.',
+    '- If the race happens annually but you do not know the exact upcoming date, use the typical pattern (e.g. "second Saturday of November") to estimate, and set confidence to "medium".',
+    '- If multiple races match, pick the most famous one.',
+    '- "distance" must be one of the exact strings listed above.',
+    '- Return JSON ONLY, no markdown fences, no commentary.'
+  ].join('\n');
+
+  var payload = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.2,
+      response_mime_type: 'application/json'
+    }
+  };
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  if (response.getResponseCode() !== 200) {
+    return { error: 'Lookup failed: ' + response.getContentText().slice(0, 300) };
+  }
+
+  var data = JSON.parse(response.getContentText());
+  var text = data.candidates && data.candidates[0] && data.candidates[0].content
+    ? data.candidates[0].content.parts.map(function(p) { return p.text || ''; }).join('')
+    : '';
+
+  var parsed;
+  try { parsed = JSON.parse(text); } catch(e) { return { error: 'Could not parse lookup response.' }; }
+  return { success: true, race: parsed };
 }
 
 function buildSystemPrompt(style) {

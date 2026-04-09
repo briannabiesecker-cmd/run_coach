@@ -791,26 +791,46 @@
 
     <div id="form-alert" class="alert error hidden"></div>
 
-    <div class="row">
-      <div class="field">
-        <label>Race distance</label>
-        <select id="race-distance">
-          <option value="">Choose…</option>
-          <option value="5K">5K</option>
-          <option value="10K">10K</option>
-          <option value="Half Marathon">Half Marathon</option>
-          <option value="Marathon">Marathon</option>
-        </select>
+    <!-- Race lookup -->
+    <div class="field">
+      <label>Race name</label>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:6px;">
+        <input type="text" id="race-name" placeholder="e.g. Richmond Marathon" />
+        <button type="button" class="btn-primary" id="lookup-btn" style="padding:0 16px;width:auto;font-size:13px;" onclick="lookupRaceClick()">Find</button>
       </div>
-      <div class="field">
-        <label>Race date</label>
-        <input type="date" id="race-date" />
+      <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">We'll look it up and confirm with you</div>
+    </div>
+
+    <!-- Confirmation card (shown after successful lookup) -->
+    <div id="race-confirm-card" class="card hidden" style="border:1px solid var(--accent-border);background:var(--accent-bg);">
+      <div style="font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">We found</div>
+      <div id="race-confirm-name" style="font-size:16px;font-weight:800;color:var(--ink);margin-top:4px;"></div>
+      <div id="race-confirm-meta" style="font-size:13px;color:var(--ink-mid);margin-top:2px;"></div>
+      <div id="race-confirm-confidence" style="font-size:11px;color:var(--ink-light);margin-top:6px;"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button type="button" class="btn-primary" style="flex:1;padding:10px;font-size:13px;" onclick="confirmRaceLookup()">Yes, that's it</button>
+        <button type="button" class="btn-ghost" style="flex:1;margin-top:0;" onclick="rejectRaceLookup()">Edit manually</button>
       </div>
     </div>
 
-    <div class="field">
-      <label>Race name (optional)</label>
-      <input type="text" id="race-name" placeholder="e.g. Richmond Marathon" />
+    <!-- Manual fields (shown if lookup fails or user rejects) -->
+    <div id="race-manual-fields" class="hidden">
+      <div class="row">
+        <div class="field">
+          <label>Race distance</label>
+          <select id="race-distance">
+            <option value="">Choose…</option>
+            <option value="5K">5K</option>
+            <option value="10K">10K</option>
+            <option value="Half Marathon">Half Marathon</option>
+            <option value="Marathon">Marathon</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Race date</label>
+          <input type="date" id="race-date" />
+        </div>
+      </div>
     </div>
 
     <div class="row">
@@ -1238,10 +1258,94 @@ function resetPlan() {
   planStartDate = null;
   strengthSchedule = [];
   uploadedFiles = [];
+  confirmedRace = null;
   document.getElementById('file-list').innerHTML = '';
+  // Reset race lookup state
+  const raceInput = document.getElementById('race-name');
+  raceInput.value = '';
+  raceInput.disabled = false;
+  const lookupBtn = document.getElementById('lookup-btn');
+  lookupBtn.disabled = false;
+  lookupBtn.textContent = 'Find';
+  document.getElementById('race-confirm-card').classList.add('hidden');
+  document.getElementById('race-manual-fields').classList.add('hidden');
+  document.getElementById('form-alert').classList.add('hidden');
   renderStrengthRows();
   showView('setup');
   document.getElementById('status-pill').textContent = 'Setup';
+}
+
+// ════════════════════════════════════════════════════
+// RACE LOOKUP
+// ════════════════════════════════════════════════════
+let confirmedRace = null; // { name, date, distance, location } once user confirms
+
+async function lookupRaceClick() {
+  const name = document.getElementById('race-name').value.trim();
+  const btn  = document.getElementById('lookup-btn');
+  if (!name) {
+    showFormAlert('Enter a race name first.');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '…';
+  document.getElementById('race-confirm-card').classList.add('hidden');
+  document.getElementById('race-manual-fields').classList.add('hidden');
+
+  try {
+    const res = await postJson({ action: 'lookupRace', passcode: getPasscode(), raceName: name });
+    if (res.error) {
+      if (res.error === 'Unauthorized') { clearPasscode(); showView('passcode'); return; }
+      throw new Error(res.error);
+    }
+    const race = res.race;
+    if (!race || !race.found) {
+      showFormAlert("Couldn't find that race. Enter the date manually below.");
+      document.getElementById('race-manual-fields').classList.remove('hidden');
+      return;
+    }
+    showRaceConfirmCard(race);
+  } catch (e) {
+    showFormAlert('Lookup failed: ' + e.message + '. Enter manually below.');
+    document.getElementById('race-manual-fields').classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Find';
+  }
+}
+
+function showRaceConfirmCard(race) {
+  document.getElementById('race-confirm-name').textContent = race.name || 'Race';
+  const meta = [race.date, race.location, race.distance].filter(Boolean).join(' · ');
+  document.getElementById('race-confirm-meta').textContent = meta;
+  const confLabel = race.confidence === 'high' ? 'High confidence' :
+                    race.confidence === 'medium' ? 'Medium confidence — please verify the date' :
+                    'Low confidence — please verify';
+  document.getElementById('race-confirm-confidence').textContent = confLabel;
+  document.getElementById('race-confirm-card').classList.remove('hidden');
+  // stash race so confirmRaceLookup can use it
+  document.getElementById('race-confirm-card').dataset.race = JSON.stringify(race);
+}
+
+function confirmRaceLookup() {
+  const card = document.getElementById('race-confirm-card');
+  const race = JSON.parse(card.dataset.race || '{}');
+  confirmedRace = race;
+  // Hide both lookup card and manual fields
+  card.classList.add('hidden');
+  document.getElementById('race-manual-fields').classList.add('hidden');
+  // Update the race name input as a confirmation display
+  const input = document.getElementById('race-name');
+  input.value = race.name || input.value;
+  input.disabled = true;
+  document.getElementById('lookup-btn').textContent = '✓';
+  document.getElementById('lookup-btn').disabled = true;
+}
+
+function rejectRaceLookup() {
+  document.getElementById('race-confirm-card').classList.add('hidden');
+  document.getElementById('race-manual-fields').classList.remove('hidden');
+  confirmedRace = null;
 }
 
 // ════════════════════════════════════════════════════
@@ -1276,15 +1380,24 @@ function renderFileList() {
 // SUBMIT FORM
 // ════════════════════════════════════════════════════
 async function submitForm() {
-  const distance = document.getElementById('race-distance').value;
-  const date     = document.getElementById('race-date').value;
-  const raceName = document.getElementById('race-name').value;
+  // Prefer confirmed lookup; fall back to manual fields
+  let distance, date, raceName;
+  if (confirmedRace) {
+    distance = confirmedRace.distance;
+    date     = confirmedRace.date;
+    raceName = confirmedRace.name;
+  } else {
+    distance = document.getElementById('race-distance').value;
+    date     = document.getElementById('race-date').value;
+    raceName = document.getElementById('race-name').value;
+  }
   const mileage  = document.getElementById('weekly-mileage').value;
   const goal     = document.getElementById('goal-time').value;
   const style    = document.getElementById('coaching-style').value;
 
   if (!distance || !date) {
-    showFormAlert('Please choose a race distance and date.');
+    showFormAlert('Please find a race or enter the date manually.');
+    document.getElementById('race-manual-fields').classList.remove('hidden');
     return;
   }
   if (!SCRIPT_URL) {
