@@ -552,6 +552,136 @@
     border: 1px solid var(--border);
   }
 
+  /* Log tab */
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .log-filter {
+    display: flex;
+    background: var(--bg-elev);
+    border-radius: 10px;
+    padding: 3px;
+    border: 1px solid var(--border);
+  }
+  .log-filter-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-light);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .log-filter-btn:hover { color: var(--ink); }
+  .log-filter-btn.active {
+    background: var(--accent);
+    color: #0a1628;
+  }
+  .log-stats-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+  .log-stat {
+    text-align: center;
+  }
+  .log-stat .num {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .log-stat .label {
+    font-size: 10px;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+  .log-month-header {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 16px 0 8px;
+  }
+  .log-row {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .log-row.done     { border-left-color: var(--accent); }
+  .log-row.skipped  { border-left-color: #ef4444; }
+  .log-row.modified { border-left-color: #facc15; }
+  .log-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .log-row-date {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .log-row-type {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+  .log-row-status {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .log-row-stats {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-top: 6px;
+  }
+  .log-row-stats .sep { color: var(--ink-faint); margin: 0 6px; }
+  .log-row-meta {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 4px;
+  }
+  .log-row-meta .rpe { color: var(--accent); font-weight: 700; }
+  .log-row-meta .note { font-style: italic; }
+  .log-empty {
+    text-align: center;
+    padding: 40px 20px;
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+  }
+  .log-empty .icon { font-size: 40px; display: block; margin-bottom: 12px; }
+  .log-empty .title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .log-empty .text {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-bottom: 16px;
+  }
+
   /* Backfill preview */
   .backfill-rows {
     max-height: 300px;
@@ -1696,17 +1826,16 @@
 
     <!-- ─── LOG TAB ─── -->
     <div id="tab-log" class="tab">
-      <div class="section-label">Today's Focus</div>
-      <div class="card" id="top-priority-card"></div>
-
-      <div class="section-label">Run Analysis</div>
-      <div class="card" id="run-analysis-card"></div>
-
-      <div class="section-label">Recent Uploads</div>
-      <div id="upload-list" class="empty">
-        <span class="icon">📸</span>
-        Upload Strava screenshots when you start a new plan to get analysis here.
+      <div class="log-header">
+        <div class="section-label" style="margin-bottom:0;">Activity Log</div>
+        <div class="log-filter">
+          <button class="log-filter-btn active" data-filter="all" onclick="setLogFilter('all')">All</button>
+          <button class="log-filter-btn" data-filter="run" onclick="setLogFilter('run')">Runs</button>
+          <button class="log-filter-btn" data-filter="strength" onclick="setLogFilter('strength')">Strength</button>
+        </div>
       </div>
+      <div id="log-stats-bar"></div>
+      <div id="log-list"></div>
     </div>
 
     <!-- ─── PERFORMANCE TAB ─── -->
@@ -3469,14 +3598,138 @@ function renderPlan() {
 }
 
 // ─── LOG TAB ───
-function renderLog() {
-  document.getElementById('top-priority-card').innerHTML = plan.topPriority
-    ? `<div style="font-size:13px;color:var(--ink);line-height:1.6;">${escape(plan.topPriority)}</div>`
-    : '<div class="empty">No priority set</div>';
+let logFilter = 'all'; // 'all' | 'run' | 'strength'
 
-  document.getElementById('run-analysis-card').innerHTML = plan.currentRunAnalysis
-    ? `<div style="font-size:13px;color:var(--ink-mid);line-height:1.6;">${escape(plan.currentRunAnalysis)}</div>`
-    : '<div class="empty"><span class="icon">📊</span>Upload Strava screenshots when starting a new plan to get a run analysis here.</div>';
+function setLogFilter(f) {
+  logFilter = f;
+  document.querySelectorAll('.log-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === f);
+  });
+  renderLog();
+}
+
+function getAllCheckIns() {
+  const all = [];
+  for (const date in checkIns) {
+    const day = checkIns[date];
+    if (day.run) {
+      all.push({
+        date,
+        type: 'run',
+        data: day.run,
+        dateObj: new Date(date + 'T00:00:00')
+      });
+    }
+    if (day.strength) {
+      all.push({
+        date,
+        type: 'strength',
+        data: day.strength,
+        dateObj: new Date(date + 'T00:00:00')
+      });
+    }
+  }
+  return all.sort((a, b) => b.dateObj - a.dateObj);
+}
+
+function renderLog() {
+  let entries = getAllCheckIns();
+  if (logFilter !== 'all') {
+    entries = entries.filter(e => e.type === logFilter);
+  }
+
+  // Stats bar
+  const runs = entries.filter(e => e.type === 'run');
+  const totalMiles = runs.reduce((s, e) => s + (e.data.distance || 0), 0);
+  const doneRuns = runs.filter(e => e.data.status === 'done').length;
+  const strength = entries.filter(e => e.type === 'strength' && e.data.status === 'done').length;
+  document.getElementById('log-stats-bar').innerHTML = `
+    <div class="log-stats-bar">
+      <div class="log-stat"><div class="num">${doneRuns}</div><div class="label">Runs</div></div>
+      <div class="log-stat"><div class="num">${totalMiles.toFixed(0)}</div><div class="label">Total Miles</div></div>
+      <div class="log-stat"><div class="num">${strength}</div><div class="label">Strength</div></div>
+    </div>`;
+
+  // Empty state
+  if (!entries.length) {
+    document.getElementById('log-list').innerHTML = `
+      <div class="log-empty">
+        <span class="icon">📒</span>
+        <div class="title">No activity logged yet</div>
+        <div class="text">Log today's run on the Home tab, or backfill from your Strava history.</div>
+        <button class="btn-ghost" onclick="openBackfill()">📥 Backfill from Strava CSV</button>
+      </div>`;
+    return;
+  }
+
+  // Group by month
+  const groups = {};
+  entries.forEach(e => {
+    const key = e.dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
+
+  let html = '';
+  for (const month in groups) {
+    html += `<div class="log-month-header">${month}</div>`;
+    groups[month].forEach(e => {
+      html += renderLogRow(e);
+    });
+  }
+  document.getElementById('log-list').innerHTML = html;
+}
+
+function renderLogRow(entry) {
+  const d = entry.data;
+  const status = d.status || 'done';
+  const dateLabel = entry.dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  // Type display
+  let typeText = '';
+  let icon = '';
+  if (entry.type === 'run') {
+    const t = d.actualType || 'Run';
+    icon = TYPE_ICONS[t] || '🏃';
+    typeText = t;
+  } else {
+    icon = '💪';
+    typeText = 'Strength';
+  }
+
+  // Status icon
+  const statusIcon = status === 'done' ? '✓' : status === 'skipped' ? '✗' : '⚙';
+
+  // Stats line (run only)
+  let statsLine = '';
+  if (entry.type === 'run' && (d.distance || d.duration || d.avgHR)) {
+    const parts = [];
+    if (d.distance) parts.push(`<strong>${d.distance}</strong> mi`);
+    if (d.duration) parts.push(escape(d.duration));
+    const pace = calcPace(d.distance, d.duration);
+    if (pace) parts.push(pace);
+    if (d.avgHR) parts.push(`HR ${d.avgHR}`);
+    statsLine = `<div class="log-row-stats">${parts.join('<span class="sep">·</span>')}</div>`;
+  }
+
+  // Meta line (RPE + note)
+  let metaParts = [];
+  if (d.rpe) metaParts.push(`<span class="rpe">RPE ${d.rpe}/10</span>`);
+  if (d.note) metaParts.push(`<span class="note">"${escape(d.note)}"</span>`);
+  const metaLine = metaParts.length ? `<div class="log-row-meta">${metaParts.join(' · ')}</div>` : '';
+
+  return `
+    <div class="log-row ${status}">
+      <div class="log-row-head">
+        <div>
+          <div class="log-row-date">${dateLabel}</div>
+          <div class="log-row-type">${icon} ${escape(typeText)}</div>
+        </div>
+        <div class="log-row-status">${statusIcon}</div>
+      </div>
+      ${statsLine}
+      ${metaLine}
+    </div>`;
 }
 
 // ─── PERFORMANCE TAB ───
