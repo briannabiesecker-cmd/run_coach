@@ -235,6 +235,136 @@
     font-size: 15px;
     color: var(--ink);
   }
+
+  /* Plan header */
+  .plan-header {
+    text-align: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .plan-race { font-size: 22px; font-weight: 800; color: var(--ink); }
+  .plan-date { font-size: 14px; color: var(--ink-mid); margin-top: 2px; }
+  .plan-weeks {
+    display: inline-block;
+    background: var(--accent-bg);
+    color: var(--accent-dark);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-top: 8px;
+  }
+
+  /* Pace zones */
+  .pace-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .pace-card {
+    background: var(--bg);
+    padding: 10px 12px;
+    border-radius: var(--radius);
+  }
+  .pace-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-light);
+  }
+  .pace-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+
+  /* Phase rows */
+  .phase-row {
+    display: grid;
+    grid-template-columns: 80px 80px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .phase-row:last-child { border-bottom: none; }
+  .phase-name { font-weight: 700; color: var(--accent-dark); }
+  .phase-weeks { color: var(--ink-mid); font-size: 13px; }
+  .phase-goal { color: var(--ink); }
+
+  /* Weekly schedule (collapsible) */
+  .week-details {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    background: white;
+  }
+  .week-details summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    display: grid;
+    grid-template-columns: 60px 70px 60px 1fr;
+    gap: 10px;
+    align-items: center;
+    font-size: 14px;
+  }
+  .week-details summary::-webkit-details-marker { display: none; }
+  .week-details summary::marker { display: none; }
+  .week-num { font-weight: 700; color: var(--ink); }
+  .week-phase {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ink-light);
+  }
+  .week-mi {
+    font-weight: 700;
+    color: var(--accent-dark);
+    text-align: right;
+  }
+  .week-focus-text { color: var(--ink-mid); font-size: 13px; }
+  @media (max-width: 600px) {
+    .week-details summary { grid-template-columns: 50px 1fr 60px; }
+    .week-focus-text { grid-column: 1 / -1; font-size: 12px; }
+  }
+
+  .day-grid {
+    border-top: 1px solid var(--line);
+    padding: 10px 14px;
+  }
+  .day-row {
+    display: grid;
+    grid-template-columns: 50px 80px 60px 1fr;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+    align-items: center;
+  }
+  .day-name { font-weight: 700; color: var(--ink); }
+  .day-type {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    text-align: center;
+  }
+  .day-easy .day-type     { background: #DCFCE7; color: #166534; }
+  .day-long .day-type     { background: #DBEAFE; color: #1E40AF; }
+  .day-tempo .day-type    { background: #FEF3C7; color: #92400E; }
+  .day-intervals .day-type{ background: #FCE7F3; color: #9F1239; }
+  .day-rest .day-type     { background: var(--line); color: var(--ink-light); }
+  .day-cross .day-type    { background: #E0E7FF; color: #3730A3; }
+  .day-miles { color: var(--ink-mid); font-size: 12px; text-align: right; }
+  .day-note { color: var(--ink-light); font-size: 12px; }
+  @media (max-width: 600px) {
+    .day-row { grid-template-columns: 40px 70px 50px 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -403,28 +533,81 @@ function renderResult(r) {
   const el = document.getElementById('result-content');
 
   let html = '';
+
+  // Header — race + total weeks
+  if (r.raceName || r.totalWeeks) {
+    html += '<div class="plan-header">';
+    if (r.raceName) html += '<div class="plan-race">' + escape(r.raceName) + '</div>';
+    if (r.raceDate) html += '<div class="plan-date">' + escape(r.raceDate) + '</div>';
+    if (r.totalWeeks) html += '<div class="plan-weeks">' + r.totalWeeks + '-week plan</div>';
+    html += '</div>';
+  }
+
+  // Summary
   if (r.summary) {
-    html += '<div class="result-section"><h3>Summary</h3><div class="result-summary">' + escape(r.summary) + '</div></div>';
+    html += '<div class="result-section"><div class="result-summary">' + escape(r.summary) + '</div></div>';
   }
-  if (r.recentRunAnalysis) {
-    html += '<div class="result-section"><h3>What your runs show</h3><div class="result-summary">' + escape(r.recentRunAnalysis) + '</div></div>';
+
+  // Top priority — most prominent
+  if (r.topPriority) {
+    html += '<div class="result-section"><h3>Focus this week</h3><div class="top-rec">' + escape(r.topPriority) + '</div></div>';
   }
-  if (r.trainingPlan && r.trainingPlan.length) {
-    html += '<div class="result-section"><h3>Training plan</h3>';
-    r.trainingPlan.forEach(w => {
-      html += '<div class="week-row">' +
-        '<div class="week-label">Week ' + (w.week || '?') + (w.totalMiles ? ' — ' + w.totalMiles + ' mi' : '') + '</div>' +
-        '<div class="week-focus">' + escape(w.focus || '') + '</div>' +
-        (w.keyWorkouts ? '<div class="week-workouts">' + (Array.isArray(w.keyWorkouts) ? w.keyWorkouts : [w.keyWorkouts]).map(escape).join(' • ') + '</div>' : '') +
-        '</div>';
+
+  // Pace zones
+  if (r.paceZones) {
+    html += '<div class="result-section"><h3>Your pace zones</h3><div class="pace-grid">';
+    if (r.paceZones.easy)     html += '<div class="pace-card"><div class="pace-label">Easy</div><div class="pace-value">' + escape(r.paceZones.easy) + '</div></div>';
+    if (r.paceZones.marathon) html += '<div class="pace-card"><div class="pace-label">Marathon</div><div class="pace-value">' + escape(r.paceZones.marathon) + '</div></div>';
+    if (r.paceZones.tempo)    html += '<div class="pace-card"><div class="pace-label">Tempo</div><div class="pace-value">' + escape(r.paceZones.tempo) + '</div></div>';
+    if (r.paceZones.interval) html += '<div class="pace-card"><div class="pace-label">Interval</div><div class="pace-value">' + escape(r.paceZones.interval) + '</div></div>';
+    html += '</div></div>';
+  }
+
+  // Phases
+  if (r.phases && r.phases.length) {
+    html += '<div class="result-section"><h3>Plan phases</h3>';
+    r.phases.forEach(p => {
+      html += '<div class="phase-row"><div class="phase-name">' + escape(p.name || '') + '</div>' +
+        '<div class="phase-weeks">Weeks ' + escape(p.weeks || '') + '</div>' +
+        '<div class="phase-goal">' + escape(p.goal || '') + '</div></div>';
     });
     html += '</div>';
   }
-  if (r.topRecommendation) {
-    html += '<div class="result-section"><h3>Focus on this</h3><div class="top-rec">' + escape(r.topRecommendation) + '</div></div>';
+
+  // Run analysis
+  if (r.currentRunAnalysis) {
+    html += '<div class="result-section"><h3>What your runs show</h3><div class="result-summary">' + escape(r.currentRunAnalysis) + '</div></div>';
   }
+
+  // Weekly plan
+  if (r.weeks && r.weeks.length) {
+    html += '<div class="result-section"><h3>Weekly schedule</h3>';
+    r.weeks.forEach(w => {
+      html += '<details class="week-details"><summary>' +
+        '<span class="week-num">Week ' + (w.week || '?') + '</span>' +
+        '<span class="week-phase">' + escape(w.phase || '') + '</span>' +
+        '<span class="week-mi">' + (w.totalMiles || 0) + ' mi</span>' +
+        '<span class="week-focus-text">' + escape(w.focus || '') + '</span>' +
+        '</summary>';
+      if (w.days && w.days.length) {
+        html += '<div class="day-grid">';
+        w.days.forEach(d => {
+          html += '<div class="day-row day-' + escape((d.type || '').toLowerCase()) + '">' +
+            '<div class="day-name">' + escape(d.day || '') + '</div>' +
+            '<div class="day-type">' + escape(d.type || '') + '</div>' +
+            '<div class="day-miles">' + (d.miles || d.miles === 0 ? d.miles + ' mi' : '') + '</div>' +
+            '<div class="day-note">' + escape(d.note || '') + '</div>' +
+            '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</details>';
+    });
+    html += '</div>';
+  }
+
   if (r.raw) {
-    html += '<div class="result-section"><h3>Response</h3><pre style="white-space:pre-wrap;font-size:13px;">' + escape(r.raw) + '</pre></div>';
+    html += '<div class="result-section"><h3>Raw response</h3><pre style="white-space:pre-wrap;font-size:12px;">' + escape(r.raw) + '</pre></div>';
   }
 
   el.innerHTML = html;
