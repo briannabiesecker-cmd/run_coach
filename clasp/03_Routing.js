@@ -83,14 +83,18 @@ function doGet(e) {
 
 function doPost(e) {
   var result;
+  var startMs = Date.now();
+  var action = '';
+  var identity = '';
   try {
     var body = JSON.parse(e.postData.contents || '{}');
-    var action = body.action || '';
+    action = body.action || '';
 
     // Auth: every POST action requires the passcode (no public POSTs).
     if (action !== 'verifyPasscode') {
       var auth = checkPasscode(body.passcode);
       if (!auth.ok) {
+        logActivity(action, 'unknown', 'auth_fail', Date.now() - startMs, auth.error);
         return ContentService
           .createTextOutput(JSON.stringify({ error: auth.error }))
           .setMimeType(ContentService.MimeType.JSON);
@@ -99,8 +103,9 @@ function doPost(e) {
 
     // Rate limit: applied AFTER auth (so unauthed callers can't burn
     // through the limit on a victim's identity). 60 calls/min per user.
-    var identity = rateLimitIdentity(body);
+    identity = rateLimitIdentity(body) || '';
     if (!checkRateLimit(identity)) {
+      logActivity(action, identity, 'rate_limited', Date.now() - startMs, '');
       return ContentService
         .createTextOutput(JSON.stringify({
           error: 'Rate limit exceeded (' + RATE_LIMIT_MAX_CALLS + '/' + RATE_LIMIT_WINDOW_SEC + 's). Slow down.'
@@ -119,6 +124,13 @@ function doPost(e) {
   } catch (err) {
     result = { error: err.message || String(err) };
   }
+
+  // Log every call (success or error). Best-effort, never blocks
+  // the response. Note: logged data is metadata only — no payload
+  // contents, no PII, no secrets.
+  var status = (result && result.error) ? 'error' : 'ok';
+  var note = (result && result.error) ? String(result.error).slice(0, 200) : '';
+  logActivity(action, identity, status, Date.now() - startMs, note);
 
   return ContentService
     .createTextOutput(JSON.stringify(result))
