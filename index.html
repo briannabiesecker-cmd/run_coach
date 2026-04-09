@@ -552,6 +552,70 @@
     border: 1px solid var(--border);
   }
 
+  /* Strength rows */
+  .strength-rows { display: flex; flex-direction: column; gap: 6px; }
+  .strength-row {
+    display: grid;
+    grid-template-columns: 70px 90px 1fr 28px;
+    gap: 6px;
+    align-items: center;
+  }
+  .strength-row select, .strength-row input {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+  .strength-row .remove-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--ink-light);
+    cursor: pointer;
+    height: 36px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .strength-row .remove-btn:hover { color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+  .strength-empty {
+    font-size: 12px;
+    color: var(--ink-faint);
+    text-align: center;
+    padding: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  /* Strength badge in day strip and week mini grid */
+  .strength-badge {
+    display: inline-block;
+    font-size: 9px;
+    margin-top: 2px;
+  }
+
+  /* Today's strength card */
+  .strength-today-card {
+    background: rgba(168,85,247,0.08);
+    border: 1px solid rgba(168,85,247,0.25);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .strength-today-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: #c4b5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .strength-today-label {
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
   /* Buttons */
   .btn-primary {
     width: 100%;
@@ -770,6 +834,12 @@
     </div>
 
     <div class="field">
+      <label>Strength schedule (optional)</label>
+      <div id="strength-rows" class="strength-rows"></div>
+      <button type="button" class="btn-ghost" onclick="addStrengthRow()" style="margin-top:6px;">+ Add session</button>
+    </div>
+
+    <div class="field">
       <label>Recent Strava screenshots (optional)</label>
       <label class="file-drop" for="screenshot-input">
         <div class="icon">📷</div>
@@ -780,6 +850,21 @@
     </div>
 
     <button class="btn-primary" id="submit-btn" onclick="submitForm()">Build my plan</button>
+  </div>
+
+  <!-- ═════════ STRENGTH EDIT VIEW ═════════ -->
+  <div id="view-strength" class="view hidden">
+    <div class="setup-hero">
+      <div class="setup-icon">💪</div>
+      <div class="setup-title">Strength schedule</div>
+      <div class="setup-sub">Recurring weekly sessions</div>
+    </div>
+    <div class="field">
+      <div id="strength-rows-edit" class="strength-rows"></div>
+      <button type="button" class="btn-ghost" onclick="addStrengthRow('edit')" style="margin-top:6px;">+ Add session</button>
+    </div>
+    <button class="btn-primary" onclick="saveStrengthEdit()">Save</button>
+    <button class="btn-ghost" onclick="cancelStrengthEdit()" style="margin-top:8px;">Cancel</button>
   </div>
 
   <!-- ═════════ LOADING VIEW ═════════ -->
@@ -805,13 +890,16 @@
         <div class="day-strip" id="day-strip"></div>
       </div>
 
+      <div id="strength-today-section"></div>
+
       <div class="section-label">Race Countdown</div>
       <div id="race-countdowns"></div>
 
       <div class="section-label">Quick Stats</div>
       <div class="stat-grid" id="quick-stats"></div>
 
-      <button class="btn-ghost" onclick="resetPlan()" style="margin-top:20px;">Start a new plan</button>
+      <button class="btn-ghost" onclick="openStrengthEdit()" style="margin-top:20px;">💪 Edit strength schedule</button>
+      <button class="btn-ghost" onclick="resetPlan()" style="margin-top:8px;">Start a new plan</button>
     </div>
 
     <!-- ─── PLAN TAB ─── -->
@@ -914,6 +1002,11 @@ const TYPE_ICONS = {
 let plan = null;          // saved plan from AI
 let planStartDate = null; // ISO date string when plan was generated
 let uploadedFiles = [];   // [{ name, base64 }]
+let strengthSchedule = [];// [{ day: "Wed", time: "08:00", label: "Lower body" }]
+let strengthDraft = [];   // working copy while editing
+let prevView = 'dashboard'; // for cancel-strength-edit return path
+
+const DAYS_FULL = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 // ════════════════════════════════════════════════════
 // HELPERS
@@ -950,10 +1043,87 @@ function getPhaseColor(phaseName) {
 }
 
 function showView(name) {
-  ['consent', 'passcode', 'setup', 'loading', 'dashboard'].forEach(v => {
+  ['consent', 'passcode', 'setup', 'loading', 'dashboard', 'strength'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
+}
+
+// ════════════════════════════════════════════════════
+// STRENGTH SCHEDULE
+// ════════════════════════════════════════════════════
+function addStrengthRow(target) {
+  const list = (target === 'edit') ? strengthDraft : strengthSchedule;
+  list.push({ day: 'Wed', time: '08:00', label: '' });
+  renderStrengthRows(target);
+}
+
+function removeStrengthRow(idx, target) {
+  const list = (target === 'edit') ? strengthDraft : strengthSchedule;
+  list.splice(idx, 1);
+  renderStrengthRows(target);
+}
+
+function updateStrengthRow(idx, field, value, target) {
+  const list = (target === 'edit') ? strengthDraft : strengthSchedule;
+  if (list[idx]) list[idx][field] = value;
+}
+
+function renderStrengthRows(target) {
+  const containerId = (target === 'edit') ? 'strength-rows-edit' : 'strength-rows';
+  const list = (target === 'edit') ? strengthDraft : strengthSchedule;
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<div class="strength-empty">No strength sessions added yet</div>';
+    return;
+  }
+  el.innerHTML = list.map((s, i) => `
+    <div class="strength-row">
+      <select onchange="updateStrengthRow(${i}, 'day', this.value, '${target || ''}')">
+        ${DAYS_FULL.map(d => `<option value="${d}"${s.day === d ? ' selected' : ''}>${d}</option>`).join('')}
+      </select>
+      <input type="time" value="${escape(s.time)}" onchange="updateStrengthRow(${i}, 'time', this.value, '${target || ''}')" />
+      <input type="text" value="${escape(s.label)}" placeholder="Label (optional)" onchange="updateStrengthRow(${i}, 'label', this.value, '${target || ''}')" />
+      <button type="button" class="remove-btn" onclick="removeStrengthRow(${i}, '${target || ''}')">×</button>
+    </div>
+  `).join('');
+}
+
+function openStrengthEdit() {
+  // Snapshot current schedule into draft
+  strengthDraft = JSON.parse(JSON.stringify(strengthSchedule || []));
+  prevView = 'dashboard';
+  showView('strength');
+  renderStrengthRows('edit');
+}
+
+function saveStrengthEdit() {
+  strengthSchedule = JSON.parse(JSON.stringify(strengthDraft || []));
+  persistStrengthOnly();
+  renderDashboard();
+  showView('dashboard');
+}
+
+function cancelStrengthEdit() {
+  strengthDraft = [];
+  showView(prevView);
+}
+
+function persistStrengthOnly() {
+  // Update the existing storage payload with new strength schedule
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : { plan: plan, planStartDate: planStartDate };
+    payload.strengthSchedule = strengthSchedule;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+}
+
+function getStrengthForDay(dayShort) {
+  // dayShort is "Mon", "Tue" etc.
+  return (strengthSchedule || []).filter(s => s.day === dayShort);
 }
 
 // ════════════════════════════════════════════════════
@@ -1038,7 +1208,12 @@ function switchTab(tab) {
 // PERSISTENCE
 // ════════════════════════════════════════════════════
 function savePlan(p) {
-  const payload = { plan: p, planStartDate: todayISO(), savedAt: new Date().toISOString() };
+  const payload = {
+    plan: p,
+    planStartDate: todayISO(),
+    savedAt: new Date().toISOString(),
+    strengthSchedule: strengthSchedule
+  };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
   planStartDate = payload.planStartDate;
@@ -1051,17 +1226,20 @@ function loadPlan() {
     const data = JSON.parse(raw);
     plan = data.plan;
     planStartDate = data.planStartDate;
+    strengthSchedule = data.strengthSchedule || [];
     return true;
   } catch(e) { return false; }
 }
 
 function resetPlan() {
-  if (!confirm('Start a new plan? This will erase your current plan.')) return;
+  if (!confirm('Start a new plan? This will erase your current plan and strength schedule.')) return;
   localStorage.removeItem(STORAGE_KEY);
   plan = null;
   planStartDate = null;
+  strengthSchedule = [];
   uploadedFiles = [];
   document.getElementById('file-list').innerHTML = '';
+  renderStrengthRows();
   showView('setup');
   document.getElementById('status-pill').textContent = 'Setup';
 }
@@ -1209,9 +1387,28 @@ function renderHome() {
       const cell = document.createElement('div');
       cell.className = 'day-cell' + (isToday ? ' today' : (isDone ? ' done' : ''));
       const icon = TYPE_ICONS[d.type] || '—';
-      cell.innerHTML = `<div class="day-letter">${dayLetters[i]}</div><div class="day-icon">${icon}</div><div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>`;
+      const dayShort = DAYS_FULL[i];
+      const hasStrength = getStrengthForDay(dayShort).length > 0;
+      const strengthMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
+      cell.innerHTML = `<div class="day-letter">${dayLetters[i]}</div><div class="day-icon">${icon}</div><div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>${strengthMark}`;
       stripEl.appendChild(cell);
     });
+  }
+
+  // Today's strength card (only if a session is scheduled today)
+  const todayShort = DAYS_FULL[dayIdx];
+  const todayStrength = getStrengthForDay(todayShort);
+  const strSection = document.getElementById('strength-today-section');
+  if (todayStrength.length) {
+    strSection.innerHTML = '<div class="section-label">Today\'s Strength</div>' +
+      todayStrength.map(s => `
+        <div class="strength-today-card">
+          <div class="strength-today-time">💪 ${escape(s.time)}</div>
+          <div class="strength-today-label">${escape(s.label || 'Strength session')}</div>
+        </div>
+      `).join('');
+  } else {
+    strSection.innerHTML = '';
   }
 
   // Race countdown
@@ -1283,7 +1480,10 @@ function renderPlan() {
     const phaseColor = getPhaseColor(w.phase);
     const days = (w.days || []).map((d, i) => {
       const isRest = d.type === 'Rest' || !d.miles;
-      return `<div class="day-mini${isRest ? ' rest' : ''}"><div class="label">${dayLetters[i]}</div><div class="val">${isRest ? '—' : d.miles}</div></div>`;
+      const dayShort = DAYS_FULL[i];
+      const hasStrength = getStrengthForDay(dayShort).length > 0;
+      const strMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
+      return `<div class="day-mini${isRest ? ' rest' : ''}"><div class="label">${dayLetters[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
     }).join('');
     return `
       <div class="week-card${isCurrent ? ' current' : ''}">
@@ -1378,6 +1578,8 @@ async function postJson(body) {
 // INIT
 // ════════════════════════════════════════════════════
 function init() {
+  // Render the strength rows once so the empty-state shows on setup form
+  renderStrengthRows();
   routeNext();
 }
 init();
