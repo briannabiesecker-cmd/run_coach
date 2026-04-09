@@ -259,6 +259,89 @@
     border: 1px solid var(--accent-border);
   }
 
+  /* Stacked sessions in hero (hybrid run + strength) */
+  .workout-hero-datestamp {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-sessions {
+    margin-top: 14px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .workout-hero-session {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 14px 14px;
+  }
+  .workout-hero-session.done {
+    background: rgba(0,200,150,0.08);
+    border-color: var(--accent-border);
+  }
+  .workout-hero-session-icon {
+    font-size: 26px;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 38px;
+    text-align: center;
+  }
+  .workout-hero-session-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .workout-hero-session-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--ink-light);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+  }
+  .workout-hero-session-headline {
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1.15;
+    margin-top: 2px;
+  }
+  .workout-hero-session-meta {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .workout-hero-session-cta {
+    flex-shrink: 0;
+    background: var(--accent);
+    color: #0a1628;
+    border: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .workout-hero-session-cta.done {
+    background: rgba(0,200,150,0.15);
+    color: var(--accent);
+    border: 1px solid var(--accent-border);
+  }
+  .workout-hero-session-cta:hover { opacity: 0.92; }
+
   /* This week strip */
   .week-strip-card {
     background: var(--bg-elev);
@@ -2718,14 +2801,14 @@
       <!-- Top: race countdown (primary hero) -->
       <div id="race-countdown-hero"></div>
 
-      <!-- Workout HERO -->
+      <!-- Workout HERO (run + strength sessions stacked) -->
       <div id="workout-hero"></div>
+
+      <!-- Inline check-in form slot (expands when user taps Log run / Mark done) -->
+      <div id="strength-today-section"></div>
 
       <!-- This week strip -->
       <div id="week-strip-section"></div>
-
-      <!-- Strength today (only if scheduled) -->
-      <div id="strength-today-section"></div>
 
       <!-- Wellness footer (collapsed) -->
       <div id="wellness-section"></div>
@@ -5004,27 +5087,92 @@ function renderHome() {
       const todayShort = DAYS_FULL[dayIdx];
       const todayStrengthHero = getStrengthForDay(todayShort);
       const icon = TYPE_ICONS[today.type] || '🏃';
-      const milesText = today.miles ? ` · ${today.miles} mi` : '';
-      const strengthSuffix = todayStrengthHero.length ? ' + 💪' : '';
 
-      // Pace target
+      // Date stamp ─ TODAY · TUE APR 8
+      const todayDateObj = new Date();
+      const dateStamp = `Today · ${todayDateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+
+      // ── RUN SESSION ROW ──
+      const runCheckIn = checkIns[todayISO()] && checkIns[todayISO()].run;
+      const runLogged = runCheckIn && runCheckIn.status;
+      const isRest = today.type === 'Rest';
       const pace = getPaceForWorkout(today.type);
-      const paceBlock = pace ? `<div class="workout-hero-pace">Target pace: ${escape(pace)}</div>` : '';
 
-      // Purpose (from intention library, condensed)
+      let runHeadline, runMeta;
+      if (isRest) {
+        runHeadline = 'Rest day';
+        runMeta = 'Recovery is when adaptation happens';
+      } else {
+        runHeadline = escape(today.type) + (today.miles ? ` · ${today.miles} mi` : '');
+        const metaParts = [];
+        if (pace) metaParts.push(`Target pace ${escape(pace)}`);
+        runMeta = metaParts.join(' · ');
+      }
+
+      let runCtaLabel, runCtaClass, runCtaAction;
+      if (runLogged) {
+        runCtaLabel = `✓ Done · RPE ${runCheckIn.rpe || '—'}`;
+        runCtaClass = 'workout-hero-session-cta done';
+        runCtaAction = `onclick="openCheckInForm('run', ${JSON.stringify(runCheckIn).replace(/"/g, '&quot;')})"`;
+      } else {
+        runCtaLabel = isRest ? 'Mark complete' : 'Log run →';
+        runCtaClass = 'workout-hero-session-cta';
+        runCtaAction = `onclick="openCheckInForm('run')"`;
+      }
+
+      const runRow = `
+        <div class="workout-hero-session ${runLogged ? 'done' : ''}">
+          <div class="workout-hero-session-icon">${icon}</div>
+          <div class="workout-hero-session-body">
+            <div class="workout-hero-session-label">${isRest ? 'Today' : 'Run'}</div>
+            <div class="workout-hero-session-headline">${runHeadline}</div>
+            ${runMeta ? `<div class="workout-hero-session-meta">${runMeta}</div>` : ''}
+          </div>
+          <button class="${runCtaClass}" ${runCtaAction}>${runCtaLabel}</button>
+        </div>`;
+
+      // ── STRENGTH SESSION ROW (only if scheduled) ──
+      let strengthRow = '';
+      if (todayStrengthHero.length) {
+        const strengthCheckIn = checkIns[todayISO()] && checkIns[todayISO()].strength;
+        const strengthLogged = strengthCheckIn && strengthCheckIn.status;
+        const first = todayStrengthHero[0];
+        const timeLabel = escape(first.time || '');
+        const labelText = escape(first.label || 'Strength session');
+        const extras = todayStrengthHero.length > 1
+          ? ` (+${todayStrengthHero.length - 1} more)`
+          : '';
+
+        let strCtaLabel, strCtaClass, strCtaAction;
+        if (strengthLogged) {
+          strCtaLabel = `✓ Done · RPE ${strengthCheckIn.rpe || '—'}`;
+          strCtaClass = 'workout-hero-session-cta done';
+          strCtaAction = `onclick="openCheckInForm('strength', ${JSON.stringify(strengthCheckIn).replace(/"/g, '&quot;')})"`;
+        } else {
+          strCtaLabel = 'Mark done ✓';
+          strCtaClass = 'workout-hero-session-cta';
+          strCtaAction = `onclick="openCheckInForm('strength')"`;
+        }
+
+        strengthRow = `
+          <div class="workout-hero-session ${strengthLogged ? 'done' : ''}">
+            <div class="workout-hero-session-icon">💪</div>
+            <div class="workout-hero-session-body">
+              <div class="workout-hero-session-label">Strength</div>
+              <div class="workout-hero-session-headline">${timeLabel || labelText}</div>
+              <div class="workout-hero-session-meta">${timeLabel ? labelText : ''}${extras}</div>
+            </div>
+            <button class="${strCtaClass}" ${strCtaAction}>${strCtaLabel}</button>
+          </div>`;
+      }
+
+      // Coaching note (single, applies to the run session)
       const intent = INTENTION_LIB[today.type];
       const purposeBlock = intent
         ? `<div class="workout-hero-purpose"><strong>The point:</strong> ${escape(intent.purpose)}</div>`
         : '';
-
-      // Today's note from plan
       const noteBlock = today.note
-        ? `<div class="workout-hero-purpose" style="margin-top:8px;"><strong>Today:</strong> ${escape(today.note)}</div>`
-        : '';
-
-      // Strength inline note
-      const strengthBlock = todayStrengthHero.length
-        ? `<div class="workout-hero-purpose" style="margin-top:8px;"><strong>💪 Strength:</strong> ${todayStrengthHero.map(s => escape(s.time + (s.label ? ' ' + s.label : ''))).join(' · ')}</div>`
+        ? `<div class="workout-hero-purpose" style="margin-top:8px;"><strong>Coach note:</strong> ${escape(today.note)}</div>`
         : '';
 
       // Readiness warning banner
@@ -5032,31 +5180,20 @@ function renderHome() {
         ? `<div class="workout-hero-readiness-warn ${readiness.status}">${escape(readiness.suggestion)}</div>`
         : '';
 
-      // Check-in status
-      const todayCheckIn = checkIns[todayISO()] && checkIns[todayISO()].run;
-      const isLogged = todayCheckIn && todayCheckIn.status;
-      const ctaLabel = isLogged
-        ? `✓ Logged · RPE ${todayCheckIn.rpe || '—'}`
-        : (today.type === 'Rest' ? 'Mark rest day complete' : 'Log this workout →');
-      const ctaClass = isLogged ? 'workout-hero-cta done' : 'workout-hero-cta';
-      const ctaAction = isLogged
-        ? `onclick="openCheckInForm('run', ${JSON.stringify(todayCheckIn).replace(/"/g, '&quot;')})"`
-        : `onclick="openCheckInForm('run')"`;
-
       heroEl.innerHTML = `
         <div class="workout-hero">
           <div class="workout-hero-tags">
             <div class="workout-hero-phase">Wk ${week.week} · ${escape(week.phase || '')}</div>
             <div class="workout-hero-readiness ${readiness.status}">${dotIcon} ${escape(readiness.message)}</div>
           </div>
-          <div class="workout-hero-label">Today's Workout</div>
-          <div class="workout-hero-title">${icon} ${escape(today.type)}${milesText}${strengthSuffix}</div>
-          ${paceBlock}
+          <div class="workout-hero-datestamp">${escape(dateStamp)}</div>
+          <div class="workout-hero-sessions">
+            ${runRow}
+            ${strengthRow}
+          </div>
           ${purposeBlock}
           ${noteBlock}
-          ${strengthBlock}
           ${readinessWarn}
-          <button class="${ctaClass}" ${ctaAction}>${ctaLabel}</button>
         </div>`;
     } else {
       heroEl.innerHTML = `
@@ -5102,16 +5239,30 @@ function renderHome() {
       </div>`;
   }
 
-  // ─── Strength today (separate card if scheduled) ───
-  const todayShort2 = DAYS_FULL[dayIdx];
-  const todayStrength = getStrengthForDay(todayShort2);
-  const strSection = document.getElementById('strength-today-section');
-  if (strSection) {
-    if (todayStrength.length) {
-      const strSummary = todayStrength.map(s => `💪 ${escape(s.time)} ${escape(s.label || 'Strength')}`).join(' · ');
-      strSection.innerHTML = renderCheckInCard('strength', strSummary);
+  // ─── Inline check-in form slot ───
+  // The hero now shows both run and strength as session rows. When a user
+  // taps "Log run" or "Mark done" in the hero, the corresponding check-in
+  // form expands inline below the hero in this slot.
+  const formSlot = document.getElementById('strength-today-section');
+  if (formSlot) {
+    if (checkInForm.type === 'run') {
+      // Build a summary line that mirrors what the hero shows
+      const todayPlanned = week && week.days && week.days[dayIdx];
+      const planIcon = todayPlanned ? (TYPE_ICONS[todayPlanned.type] || '🏃') : '🏃';
+      const planMiles = todayPlanned && todayPlanned.miles ? ` · ${todayPlanned.miles} mi` : '';
+      const runSummary = todayPlanned
+        ? `${planIcon} ${escape(todayPlanned.type)}${planMiles}`
+        : '🏃 Run';
+      formSlot.innerHTML = renderCheckInCard('run', runSummary);
+    } else if (checkInForm.type === 'strength') {
+      const todayShort2 = DAYS_FULL[dayIdx];
+      const todayStrength = getStrengthForDay(todayShort2);
+      const strSummary = todayStrength.length
+        ? todayStrength.map(s => `💪 ${escape(s.time)} ${escape(s.label || 'Strength')}`).join(' · ')
+        : '💪 Strength session';
+      formSlot.innerHTML = renderCheckInCard('strength', strSummary);
     } else {
-      strSection.innerHTML = '';
+      formSlot.innerHTML = '';
     }
   }
 
@@ -5662,9 +5813,20 @@ function formatWeekRange(startISO) {
   return `${fmt(d1)}–${fmt(d2)}`;
 }
 
+// For the current week, compute miles planned through a given day index (inclusive)
+function plannedMilesThroughDay(wkIdx, throughDayIdx) {
+  if (!plan || !plan.weeks || !plan.weeks[wkIdx] || !plan.weeks[wkIdx].days) return 0;
+  let total = 0;
+  for (let i = 0; i <= throughDayIdx && i < plan.weeks[wkIdx].days.length; i++) {
+    total += plan.weeks[wkIdx].days[i].miles || 0;
+  }
+  return total;
+}
+
 function renderRecentWeeksDetail() {
   if (!plan || !plan.weeks) return '';
   const currentIdx = getCurrentWeekIndex();
+  const todayDayIdx = getCurrentDayIndex();
   const histWeeks = getHistoricalWeeks();
 
   const tiles = [];
@@ -5672,21 +5834,27 @@ function renderRecentWeeksDetail() {
     const wkIdx = currentIdx + offset;
     if (wkIdx >= 0 && wkIdx < plan.weeks.length) {
       const w = plan.weeks[wkIdx];
-      // Compute the calendar date range for this plan week
       let dateRange = '';
       if (planStartDate) {
         const start = new Date(planStartDate + 'T00:00:00');
         start.setDate(start.getDate() + wkIdx * 7);
         dateRange = formatWeekRange(start.toISOString().slice(0, 10));
       }
+      const isCurrent = offset === 0;
+      const fullWeekPlanned = w.totalMiles || 0;
+      const actual = actualMilesForWeek(wkIdx);
+      // Pacing math for current week — actual vs planned-through-today
+      const plannedToDate = isCurrent ? plannedMilesThroughDay(wkIdx, todayDayIdx) : fullWeekPlanned;
       tiles.push({
         wkIdx,
         label: `Wk ${w.week}`,
         dateRange,
-        planned: w.totalMiles || 0,
-        actual: actualMilesForWeek(wkIdx),
-        isCurrent: offset === 0,
-        isHistorical: false
+        fullWeekPlanned,
+        plannedToDate,
+        actual,
+        isCurrent,
+        isHistorical: false,
+        dayOfWeek: isCurrent ? (todayDayIdx + 1) : 7
       });
     } else if (wkIdx < 0 && histWeeks.length >= -wkIdx) {
       // Pull from historical weeks (counted from oldest → newest)
