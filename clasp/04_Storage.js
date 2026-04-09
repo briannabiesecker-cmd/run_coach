@@ -21,48 +21,89 @@
 // CONCURRENCY: saveUserData uses LockService to prevent two simultaneous
 // writes from interleaving. Without the lock, a race could lose data.
 
+// CacheService caches the resolved folder ID across script invocations.
+// PropertiesService is the slow source-of-truth (~50ms per get); cache
+// is ~10ms. Drive search fallback (when properties miss) is ~600ms.
+// On cache hit we skip both. On stale-cache (deleted folder) we
+// invalidate and fall through to the slow path.
 function getOrCreateRunCoachFolder() {
+  var cache = CacheService.getScriptCache();
+  var cachedId = cache.get('runcoach_folder_id');
+  if (cachedId) {
+    try { return DriveApp.getFolderById(cachedId); }
+    catch (err) { cache.remove('runcoach_folder_id'); }
+  }
+
   var props = PropertiesService.getScriptProperties();
   var folderId = props.getProperty('RUNCOACH_FOLDER_ID');
   if (folderId) {
-    try { return DriveApp.getFolderById(folderId); }
+    try {
+      var f = DriveApp.getFolderById(folderId);
+      cache.put('runcoach_folder_id', folderId, CACHE_TTL_FOLDER_SEC);
+      return f;
+    }
     catch (err) { /* fall through to create */ }
   }
   var existing = DriveApp.getFoldersByName('RunCoach');
   if (existing.hasNext()) {
-    var f = existing.next();
-    props.setProperty('RUNCOACH_FOLDER_ID', f.getId());
-    return f;
+    var existingFolder = existing.next();
+    props.setProperty('RUNCOACH_FOLDER_ID', existingFolder.getId());
+    cache.put('runcoach_folder_id', existingFolder.getId(), CACHE_TTL_FOLDER_SEC);
+    return existingFolder;
   }
   var folder = DriveApp.createFolder('RunCoach');
   props.setProperty('RUNCOACH_FOLDER_ID', folder.getId());
+  cache.put('runcoach_folder_id', folder.getId(), CACHE_TTL_FOLDER_SEC);
   return folder;
 }
 
+// Per-user sheet lookup with the same cache pattern. The cache key is
+// derived from lowercased user name; values are sheet IDs (strings).
+// Stale-cache recovery handled by catching openById errors.
 function getOrCreateUserSheet(userName) {
-  var key = 'USER_SHEET_' + userName.toLowerCase();
-  var props = PropertiesService.getScriptProperties();
-  var sheetId = props.getProperty(key);
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'user_sheet_' + userName.toLowerCase();
   var ss;
-  if (sheetId) {
-    try { ss = SpreadsheetApp.openById(sheetId); }
-    catch (err) { ss = null; }
-  }
-  if (!ss) {
-    var folder = getOrCreateRunCoachFolder();
-    var fileName = 'RunCoach - ' + userName;
-    var matches = folder.getFilesByName(fileName);
-    if (matches.hasNext()) {
-      var existingFile = matches.next();
-      ss = SpreadsheetApp.openById(existingFile.getId());
-    } else {
-      ss = SpreadsheetApp.create(fileName);
-      var file = DriveApp.getFileById(ss.getId());
-      folder.addFile(file);
-      DriveApp.getRootFolder().removeFile(file);
+
+  // Fast path: cache hit → openById and return
+  var cachedId = cache.get(cacheKey);
+  if (cachedId) {
+    try {
+      ss = SpreadsheetApp.openById(cachedId);
+    } catch (err) {
+      cache.remove(cacheKey);
+      ss = null;
     }
-    props.setProperty(key, ss.getId());
   }
+
+  // Slow path: PropertiesService → Drive search → create
+  if (!ss) {
+    var key = 'USER_SHEET_' + userName.toLowerCase();
+    var props = PropertiesService.getScriptProperties();
+    var sheetId = props.getProperty(key);
+    if (sheetId) {
+      try { ss = SpreadsheetApp.openById(sheetId); }
+      catch (err) { ss = null; }
+    }
+    if (!ss) {
+      var folder = getOrCreateRunCoachFolder();
+      var fileName = 'RunCoach - ' + userName;
+      var matches = folder.getFilesByName(fileName);
+      if (matches.hasNext()) {
+        var existingFile = matches.next();
+        ss = SpreadsheetApp.openById(existingFile.getId());
+      } else {
+        ss = SpreadsheetApp.create(fileName);
+        var file = DriveApp.getFileById(ss.getId());
+        folder.addFile(file);
+        DriveApp.getRootFolder().removeFile(file);
+      }
+      props.setProperty(key, ss.getId());
+    }
+    // Whatever path we took, cache the resolved ID
+    cache.put(cacheKey, ss.getId(), CACHE_TTL_USER_SHEET_SEC);
+  }
+
   var sheet = ss.getSheetByName('data');
   if (!sheet) {
     sheet = ss.insertSheet('data');

@@ -28,6 +28,16 @@ var SHEETS_CELL_LIMIT = 49500;
 // changes; migratePayload() will handle the upgrade path.
 var PAYLOAD_VERSION = 1;
 
+// CacheService TTLs (seconds). Apps Script CacheService caps at 21,600
+// (6 hours). Sheet IDs change rarely; folder IDs essentially never.
+var CACHE_TTL_USER_SHEET_SEC = 3600;   // 1 hour — re-verify after that
+var CACHE_TTL_FOLDER_SEC     = 21600;  // 6 hours, the max
+
+// Rate limiting (per caller, sliding window in CacheService).
+// 60 calls/minute is generous for human use, kills any naive abuse loop.
+var RATE_LIMIT_WINDOW_SEC = 60;
+var RATE_LIMIT_MAX_CALLS  = 60;
+
 // Diagnostic version string returned by ?action=ping. Bump manually when
 // shipping a release worth labeling.
-var BACKEND_VERSION = 'v3-tier1-with-quota-ui';
+var BACKEND_VERSION = 'v3-tier2-cache-ratelimit';

@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════
-// ROUTING — doGet / doPost action dispatch
+// ROUTING — doGet / doPost action dispatch + rate limiting
 // ══════════════════════════════════════════════════
 //
 // Apps Script web app entry points. Two HTTP verbs:
@@ -16,6 +16,42 @@
 //
 // All actions except 'ping' and 'quotaUsed' require the passcode.
 // Action handlers live in their own files (Coach.js, Storage.js, etc.).
+//
+// Rate limiting: every authed action passes through checkRateLimit()
+// using CacheService as a sliding-window counter. Default is 60 calls
+// per 60 seconds per identity. The identity is the userName when
+// available (most actions have it), otherwise a hash of the passcode
+// so we never store the passcode itself in cache.
+
+// Sliding-window rate limiter using CacheService. Returns true if
+// the call is allowed, false if exceeded. Per-identity counter
+// auto-expires after RATE_LIMIT_WINDOW_SEC.
+function checkRateLimit(identity) {
+  if (!identity) return true; // can't rate limit anonymous — fail open
+  var cache = CacheService.getScriptCache();
+  var key = 'rl_' + identity;
+  var current = parseInt(cache.get(key) || '0', 10);
+  if (current >= RATE_LIMIT_MAX_CALLS) return false;
+  cache.put(key, String(current + 1), RATE_LIMIT_WINDOW_SEC);
+  return true;
+}
+
+// Derive a stable identity from the request body for rate limiting.
+// Prefer userName (lowercased) since most calls have it. Fall back to
+// a SHA-256 hash of the passcode so we never use the raw passcode as
+// a cache key (defense in depth — the cache is per-script and
+// shouldn't see secrets).
+function rateLimitIdentity(body) {
+  if (body && body.userName) return 'user:' + String(body.userName).toLowerCase();
+  if (body && body.passcode) {
+    var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body.passcode);
+    var hex = bytes.map(function(b) {
+      return ('0' + (b < 0 ? b + 256 : b).toString(16)).slice(-2);
+    }).join('');
+    return 'pc:' + hex.slice(0, 16);
+  }
+  return null;
+}
 
 function doGet(e) {
   var callback = e.parameter.callback || 'callback';
@@ -59,6 +95,17 @@ function doPost(e) {
           .createTextOutput(JSON.stringify({ error: auth.error }))
           .setMimeType(ContentService.MimeType.JSON);
       }
+    }
+
+    // Rate limit: applied AFTER auth (so unauthed callers can't burn
+    // through the limit on a victim's identity). 60 calls/min per user.
+    var identity = rateLimitIdentity(body);
+    if (!checkRateLimit(identity)) {
+      return ContentService
+        .createTextOutput(JSON.stringify({
+          error: 'Rate limit exceeded (' + RATE_LIMIT_MAX_CALLS + '/' + RATE_LIMIT_WINDOW_SEC + 's). Slow down.'
+        }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if      (action === 'verifyPasscode')     result = checkPasscode(body.passcode);
