@@ -3610,6 +3610,18 @@ function loadPlan() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const data = JSON.parse(raw);
+    // Reject corrupt plans (missing weeks array). Without this guard, a
+    // broken plan from a failed Gemini parse would render as a blank
+    // dashboard with no recovery path.
+    if (!data.plan || !Array.isArray(data.plan.weeks) || data.plan.weeks.length === 0) {
+      // Keep profile and check-ins so the user doesn't lose history,
+      // but force a return to setup so they can regenerate.
+      runnerProfile = data.runnerProfile || {};
+      checkIns = data.checkIns || {};
+      wellness = data.wellness || {};
+      strengthSchedule = data.strengthSchedule || [];
+      return false;
+    }
     plan = data.plan;
     planStartDate = data.planStartDate;
     strengthSchedule = data.strengthSchedule || [];
@@ -4923,6 +4935,11 @@ async function submitForm() {
       throw new Error(result.error);
     }
     if (!result.result) throw new Error('Empty response');
+    // Frontend safety net — if the backend somehow returns a plan without
+    // a weeks array, refuse to save it (would render as a blank dashboard).
+    if (!Array.isArray(result.result.weeks) || result.result.weeks.length === 0) {
+      throw new Error('Plan response was missing the weeks array. Try again.');
+    }
 
     // Override raceName if user provided one
     if (raceName && !result.result.raceName) result.result.raceName = raceName;

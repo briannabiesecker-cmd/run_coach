@@ -155,7 +155,11 @@ function coach(params) {
     contents: [{ role: 'user', parts: parts }],
     generationConfig: {
       temperature: 0.7,
-      response_mime_type: 'application/json'
+      response_mime_type: 'application/json',
+      // Plans with segments per quality day + 18-22 weeks can blow past
+      // the default 8K output token budget. Bumping to 32K gives room for
+      // a marathon plan with full per-workout structure.
+      maxOutputTokens: 32768
     }
   };
 
@@ -177,9 +181,26 @@ function coach(params) {
     ? data.candidates[0].content.parts.map(function(p) { return p.text || ''; }).join('')
     : '';
 
+  // Detect truncation: Gemini sets finishReason to "MAX_TOKENS" when the
+  // response was cut off. The JSON will be unparseable in that case.
+  var finishReason = (data.candidates && data.candidates[0] && data.candidates[0].finishReason) || '';
+  if (finishReason === 'MAX_TOKENS') {
+    return { error: 'Plan was too long and got truncated by Gemini. Try a shorter race timeline or fewer weeks.' };
+  }
+
   // Gemini returns JSON-as-string when response_mime_type=application/json
   var parsed;
-  try { parsed = JSON.parse(text); } catch(e) { parsed = { raw: text }; }
+  try {
+    parsed = JSON.parse(text);
+  } catch(e) {
+    return { error: 'Gemini returned malformed JSON: ' + String(e).slice(0, 200) + ' — first 200 chars: ' + text.slice(0, 200) };
+  }
+
+  // Sanity check: a valid plan must have a weeks array. Without this, the
+  // frontend would silently save a broken plan and show a blank dashboard.
+  if (!parsed || !Array.isArray(parsed.weeks) || parsed.weeks.length === 0) {
+    return { error: 'Plan response was missing the required "weeks" array. Try regenerating.' };
+  }
 
   return { success: true, result: parsed };
 }
