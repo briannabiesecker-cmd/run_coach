@@ -537,7 +537,7 @@
   }
   .hist-banner strong { color: var(--ink); font-weight: 700; }
 
-  /* Recent weeks detail strip */
+  /* Recent weeks — list of horizontal progress rows (Runna-style) */
   .recent-weeks-label {
     font-size: 11px;
     font-weight: 800;
@@ -546,69 +546,93 @@
     letter-spacing: 0.5px;
     margin: 8px 0 8px;
   }
-  .recent-weeks-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
+  .recent-weeks-list {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
-  .recent-week-tile {
+  .recent-week-row {
     background: var(--bg-elev-2);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 6px;
-    text-align: center;
+    border-radius: 12px;
+    padding: 12px 14px;
     cursor: pointer;
     transition: border-color 0.15s;
   }
-  .recent-week-tile:hover { border-color: var(--border-strong); }
-  .recent-week-tile.current { border-color: var(--accent); background: rgba(0,200,150,0.05); }
-  .rwt-label {
-    font-size: 10px;
-    color: var(--ink-light);
-    font-weight: 700;
-    text-transform: uppercase;
+  .recent-week-row:hover { border-color: var(--border-strong); }
+  .recent-week-row.current {
+    border-color: var(--accent);
+    background: rgba(0,200,150,0.06);
   }
-  .rwt-dates {
-    font-size: 9px;
-    color: var(--ink-faint);
-    margin-top: 1px;
-    white-space: nowrap;
-  }
-  .rwt-bars {
+  .rwr-head {
     display: flex;
-    gap: 3px;
-    align-items: flex-end;
-    justify-content: center;
-    height: 36px;
-    margin: 6px 0 4px;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
   }
-  .rwt-bar {
-    width: 12px;
-    border-radius: 2px 2px 0 0;
+  .rwr-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
   }
-  .rwt-bar.planned {
-    background: rgba(255,255,255,0.12);
-    border: 1px dashed rgba(255,255,255,0.3);
+  .rwr-label {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
-  .rwt-bar.actual {
-    background: var(--accent);
-  }
-  .rwt-bar.actual.warn { background: #facc15; }
-  .rwt-bar.actual.bad  { background: #ef4444; }
-  .rwt-numbers {
+  .recent-week-row.current .rwr-label { color: var(--accent); }
+  .rwr-dates {
     font-size: 11px;
+    color: var(--ink-light);
+  }
+  .rwr-miles {
+    font-size: 13px;
     color: var(--ink);
     font-weight: 700;
   }
-  .rwt-numbers .planned-num {
+  .rwr-miles .planned-num {
     color: var(--ink-light);
-    font-size: 10px;
-    margin-left: 2px;
+    font-weight: 500;
   }
-  .rwt-pct {
-    font-size: 9px;
-    color: var(--ink-light);
-    margin-top: 2px;
+  .rwr-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rwr-progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-elev);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .rwr-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .rwr-progress-fill.warn { background: #facc15; }
+  .rwr-progress-fill.bad  { background: #ef4444; }
+  .rwr-progress-fill.over { background: #818cf8; }
+  .rwr-pct {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink);
+    min-width: 38px;
+    text-align: right;
+  }
+  .rwr-pct.warn { color: #facc15; }
+  .rwr-pct.bad { color: #fca5a5; }
+  .rwr-pct.over { color: #c4b5fd; }
+  .rwr-historical-tag {
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
   .mileage-prog-stats {
     display: grid;
@@ -5333,33 +5357,58 @@ function renderRecentWeeksDetail() {
   }
   if (!tiles.length) return '';
 
-  const max = Math.max(...tiles.map(t => Math.max(t.planned, t.actual)), 1);
+  // Render newest first (most recent week at the top)
+  tiles.reverse();
 
   const html = tiles.map(t => {
     const pct = t.planned > 0 ? Math.round((t.actual / t.planned) * 100) : null;
-    const actualClass = pct == null ? '' : pct >= 80 ? '' : pct >= 50 ? ' warn' : ' bad';
-    const plannedH = t.planned > 0 ? Math.max(4, Math.round((t.planned / max) * 36)) : 0;
-    const actualH = t.actual > 0 ? Math.max(4, Math.round((t.actual / max) * 36)) : 0;
-    const plannedBar = t.isHistorical ? '' : `<div class="rwt-bar planned" style="height:${plannedH}px;"></div>`;
+    let pctClass = '';
+    if (pct != null) {
+      if (pct > 110)      pctClass = 'over';
+      else if (pct >= 80) pctClass = '';
+      else if (pct >= 50) pctClass = 'warn';
+      else                pctClass = 'bad';
+    }
+    const fillPct = pct != null ? Math.min(100, pct) : 0;
     const onClick = t.wkIdx != null ? `onclick="viewedWeekIdx=${t.wkIdx};switchTab('plan');renderPlan();"` : '';
+
+    // Pre-plan rows: no progress bar (no plan target)
+    if (t.isHistorical) {
+      return `
+        <div class="recent-week-row" ${onClick}>
+          <div class="rwr-head">
+            <div class="rwr-title">
+              <span class="rwr-label">Pre-plan</span>
+              <span class="rwr-dates">${escape(t.dateRange)}</span>
+            </div>
+            <div class="rwr-miles">${t.actual.toFixed(0)} mi</div>
+          </div>
+          <div class="rwr-historical-tag">Backfilled — not part of plan compliance</div>
+        </div>`;
+    }
+
+    // Plan week rows
     return `
-      <div class="recent-week-tile${t.isCurrent ? ' current' : ''}" ${onClick}>
-        <div class="rwt-label">${escape(t.label)}</div>
-        <div class="rwt-dates">${escape(t.dateRange)}</div>
-        <div class="rwt-bars">
-          ${plannedBar}
-          <div class="rwt-bar actual${actualClass}" style="height:${actualH}px;"></div>
+      <div class="recent-week-row${t.isCurrent ? ' current' : ''}" ${onClick}>
+        <div class="rwr-head">
+          <div class="rwr-title">
+            <span class="rwr-label">${escape(t.label)}${t.isCurrent ? ' · NOW' : ''}</span>
+            <span class="rwr-dates">${escape(t.dateRange)}</span>
+          </div>
+          <div class="rwr-miles">${t.actual.toFixed(0)}<span class="planned-num"> / ${t.planned}</span> mi</div>
         </div>
-        <div class="rwt-numbers">
-          ${t.actual.toFixed(0)}<span class="planned-num">${t.planned > 0 ? '/ ' + t.planned : ''}</span>
+        <div class="rwr-progress-wrap">
+          <div class="rwr-progress-bar">
+            <div class="rwr-progress-fill ${pctClass}" style="width:${fillPct}%"></div>
+          </div>
+          <div class="rwr-pct ${pctClass}">${pct != null ? pct + '%' : '—'}</div>
         </div>
-        ${pct != null ? `<div class="rwt-pct">${pct}%</div>` : '<div class="rwt-pct">—</div>'}
       </div>`;
   }).join('');
 
   return `
     <div class="recent-weeks-label">Recent 4 weeks</div>
-    <div class="recent-weeks-grid">${html}</div>
+    <div class="recent-weeks-list">${html}</div>
   `;
 }
 
