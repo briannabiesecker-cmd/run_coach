@@ -1143,6 +1143,38 @@
     text-decoration: underline;
     padding: 0;
   }
+  .screenshot-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+    background: var(--bg-elev-2);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 12px;
+    padding: 12px;
+    color: var(--ink-mid);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .screenshot-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+  .screenshot-btn input { display: none; }
+  .spinner-sm {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
   .run-fields {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -1976,6 +2008,39 @@ function updateCheckInField(field, value) {
   checkInForm[field] = value;
 }
 
+// Parse a Strava screenshot via Gemini and populate form fields
+let parseLoading = false;
+
+async function uploadRunScreenshot(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  parseLoading = true;
+  renderHome();
+  try {
+    const base64 = await fileToBase64(file);
+    const res = await postJson({
+      action: 'parseRunScreenshot',
+      passcode: getPasscode(),
+      image: base64
+    });
+    if (res.error) {
+      if (res.error === 'Unauthorized') { clearPasscode(); showView('passcode'); return; }
+      throw new Error(res.error);
+    }
+    const d = res.data || {};
+    if (d.distance != null) checkInForm.distance = String(d.distance);
+    if (d.duration)         checkInForm.duration = d.duration;
+    if (d.avgHR != null)    checkInForm.avgHR    = String(d.avgHR);
+    // Auto-set status to done since they have a screenshot of a completed run
+    if (!checkInForm.status) checkInForm.status = 'done';
+  } catch (e) {
+    alert('Could not parse screenshot: ' + e.message);
+  } finally {
+    parseLoading = false;
+    renderHome();
+  }
+}
+
 // Pace calculator: distance (mi) + duration (h:mm:ss or m:ss) → "M:SS/mi"
 function parseDurationToMinutes(s) {
   if (!s) return 0;
@@ -2777,7 +2842,15 @@ function renderCheckInCard(type, summary) {
 
   // Run metrics inputs (only for run check-ins)
   const livePace = type === 'run' ? calcPace(checkInForm.distance, checkInForm.duration) : '';
+  const screenshotBlock = type === 'run' ? `
+    <div style="font-size:11px;color:var(--ink-light);margin-top:14px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Have a Strava screenshot?</div>
+    <label class="screenshot-btn" for="run-screenshot-input">
+      ${parseLoading ? '<div class="spinner-sm"></div> Reading screenshot…' : '📷 Auto-fill from screenshot'}
+      <input type="file" id="run-screenshot-input" accept="image/*" onchange="uploadRunScreenshot(this)" ${parseLoading ? 'disabled' : ''} />
+    </label>
+  ` : '';
   const runFields = type === 'run' ? `
+    ${screenshotBlock}
     <div style="font-size:11px;color:var(--ink-light);margin-top:14px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Run details (optional)</div>
     <div class="run-fields">
       <div>

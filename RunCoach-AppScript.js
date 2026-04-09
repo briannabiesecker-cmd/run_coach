@@ -69,6 +69,10 @@ function doPost(e) {
       var auth3 = checkPasscode(body.passcode);
       if (!auth3.ok) { result = { error: auth3.error }; }
       else { result = weeklyReview(body); }
+    } else if (action === 'parseRunScreenshot') {
+      var auth4 = checkPasscode(body.passcode);
+      if (!auth4.ok) { result = { error: auth4.error }; }
+      else { result = parseRunScreenshot(body); }
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -236,6 +240,79 @@ function lookupRace(params) {
   var parsed;
   try { parsed = JSON.parse(text); } catch(e) { return { error: 'Could not parse lookup response.' }; }
   return { success: true, race: parsed };
+}
+
+// ──────────────────────────────────────────────────
+// Parse a Strava run screenshot into structured fields.
+// Returns distance, duration, avg HR, etc.
+// ──────────────────────────────────────────────────
+function parseRunScreenshot(params) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return { error: 'GEMINI_API_KEY not set in script properties.' };
+
+  var image = params.image || '';
+  if (!image) return { error: 'No image provided.' };
+
+  var systemPrompt = 'You extract running activity data from Strava screenshots. Return only JSON, no commentary.';
+
+  var userPrompt = [
+    'This is a screenshot of a single running activity from Strava.',
+    'Extract these fields and return ONLY valid JSON in this exact structure:',
+    '{',
+    '  "distance": number | null,        // miles (convert if shown in km)',
+    '  "duration": "string" | null,      // formatted as "m:ss" or "h:mm:ss"',
+    '  "avgHR": number | null,           // average heart rate in bpm',
+    '  "maxHR": number | null,           // max heart rate if shown',
+    '  "elevation": number | null,       // total elevation gain in feet (convert if meters)',
+    '  "avgPace": "string" | null,       // pace per mile (e.g. "8:45")',
+    '  "type": "Easy" | "Long" | "Tempo" | "Intervals" | "Cross" | "Other",',
+    '  "confidence": "high" | "medium" | "low"',
+    '}',
+    '',
+    'Rules:',
+    '- If a field is not visible in the screenshot, return null.',
+    '- "type" should be your best guess based on distance, pace, and any title visible.',
+    '- Long = >10 mi for marathon training, Tempo = sustained quick effort, Intervals = workout with reps.',
+    '- Convert km to miles if needed (1 km = 0.621 mi).',
+    '- Convert meters of elevation to feet if needed (1 m = 3.28 ft).',
+    '- Return JSON only.'
+  ].join('\n');
+
+  var payload = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{
+      role: 'user',
+      parts: [
+        { text: userPrompt },
+        { inline_data: { mime_type: 'image/png', data: image } }
+      ]
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      response_mime_type: 'application/json'
+    }
+  };
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  if (response.getResponseCode() !== 200) {
+    return { error: 'Parse failed: ' + response.getContentText().slice(0, 300) };
+  }
+
+  var data = JSON.parse(response.getContentText());
+  var text = data.candidates && data.candidates[0] && data.candidates[0].content
+    ? data.candidates[0].content.parts.map(function(p) { return p.text || ''; }).join('')
+    : '';
+
+  var parsed;
+  try { parsed = JSON.parse(text); } catch(e) { return { error: 'Could not parse response.' }; }
+  return { success: true, data: parsed };
 }
 
 // ──────────────────────────────────────────────────
