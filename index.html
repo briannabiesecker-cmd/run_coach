@@ -594,6 +594,69 @@
     margin-top: 2px;
   }
 
+  /* Intention card */
+  .intention-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .intention-tag {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .intention-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-top: 4px;
+  }
+  .intention-pace {
+    display: inline-block;
+    margin-top: 6px;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .intention-section {
+    margin-top: 14px;
+  }
+  .intention-section .label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .intention-section .body {
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  .intention-collapsed {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--ink-mid);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .intention-collapsed strong { color: var(--ink); }
+
   /* Modal */
   .modal-backdrop {
     position: fixed;
@@ -1305,6 +1368,7 @@
       </div>
 
       <div id="week-ahead-section"></div>
+      <div id="intention-section"></div>
       <div id="run-checkin-section"></div>
       <div id="strength-today-section"></div>
 
@@ -2070,6 +2134,85 @@ function updateStatusPill() {
   document.getElementById('status-pill').textContent = `Wk ${wkNum}${phase ? ' · ' + phase : ''}`;
 }
 
+// ─── INTENTION CARD ───
+const INTENTION_LIB = {
+  'Easy': {
+    purpose: 'Build aerobic base and recover from hard days. Easy runs are 80% of why fast people are fast — they let you stack volume without breaking down.',
+    feel: 'Conversational. You should be able to speak in full sentences. If you can\'t, slow down.',
+    tip: 'Slower than you think. The point is time on feet, not pace. Resist the urge to push.'
+  },
+  'Long': {
+    purpose: 'Build aerobic capacity, teach your body to use fat for fuel, and prepare your mind for race-day duration. The single most important workout each week.',
+    feel: 'Easy effort throughout. Last few miles can feel hard simply because of accumulated fatigue.',
+    tip: 'Eat carbs the night before. Fuel during if over 90 min. Refuel within 30 min after. Slow start = strong finish.'
+  },
+  'Tempo': {
+    purpose: 'Improve lactate threshold — the pace you can hold without going anaerobic. This is what makes marathon pace feel sustainable.',
+    feel: 'Comfortably hard. You can speak in 3–5 word phrases. Hard but controlled, not all-out.',
+    tip: 'Warm up 10–15 min easy first. Settle into pace gradually. Don\'t go out too fast.'
+  },
+  'Intervals': {
+    purpose: 'Improve VO2 max and running economy. Repeated bouts at faster-than-race pace teach your body to clear lactate and run more efficiently.',
+    feel: 'Very hard during work intervals, very easy during recovery. The recovery should bring you almost back to normal.',
+    tip: 'Warm up well — at least 1.5 mi easy. Hit consistent pace across reps. The first one shouldn\'t be the fastest.'
+  },
+  'Cross': {
+    purpose: 'Aerobic stimulus without impact. Active recovery that maintains fitness while letting running muscles repair.',
+    feel: 'Easy to moderate effort. You\'re recovering, not racing.',
+    tip: 'Bike, swim, elliptical — anything non-impact. 30–45 min is plenty.'
+  },
+  'Rest': {
+    purpose: 'Recovery is when adaptation happens. The training only works if you let your body absorb it.',
+    feel: 'Actually rest. Walking is fine. Don\'t fall into "active recovery" guilt.',
+    tip: 'Sleep is the best recovery tool. Hydrate. Eat well. Trust the process.'
+  }
+};
+
+function getPaceForWorkout(type) {
+  if (!plan || !plan.paceZones) return '';
+  const pz = plan.paceZones;
+  if (type === 'Easy' || type === 'Long') return pz.easy || '';
+  if (type === 'Tempo') return pz.tempo || pz.marathon || '';
+  if (type === 'Intervals') return pz.interval || '';
+  return '';
+}
+
+function renderIntentionCard() {
+  if (!plan || !plan.weeks) return '';
+  const wkIdx = getCurrentWeekIndex();
+  const week = plan.weeks[wkIdx];
+  if (!week || !week.days) return '';
+  const dayIdx = getCurrentDayIndex();
+  const today = week.days[dayIdx];
+  if (!today) return '';
+
+  const lib = INTENTION_LIB[today.type];
+  if (!lib) return '';
+
+  const icon = TYPE_ICONS[today.type] || '🏃';
+  const milesText = today.miles ? ` · ${today.miles} mi` : '';
+  const pace = getPaceForWorkout(today.type);
+
+  return `
+    <div class="intention-card">
+      <div class="intention-tag">Today's Intention</div>
+      <div class="intention-title">${icon} ${escape(today.type)}${milesText}</div>
+      ${pace ? `<div class="intention-pace">Target pace: ${escape(pace)}</div>` : ''}
+      <div class="intention-section">
+        <div class="label">The point</div>
+        <div class="body">${escape(lib.purpose)}</div>
+      </div>
+      <div class="intention-section">
+        <div class="label">How it feels</div>
+        <div class="body">${escape(lib.feel)}</div>
+      </div>
+      <div class="intention-section">
+        <div class="label">Coach's tip</div>
+        <div class="body">${escape(lib.tip)}</div>
+      </div>
+    </div>`;
+}
+
 // ─── WEEK AHEAD CARD ───
 function findWorkoutInWeek(week, types) {
   if (!week || !week.days) return null;
@@ -2349,6 +2492,9 @@ function renderHome() {
 
   // Week ahead card (after hero)
   document.getElementById('week-ahead-section').innerHTML = renderWeekAheadCard();
+
+  // Intention card (the WHY of today's workout)
+  document.getElementById('intention-section').innerHTML = renderIntentionCard();
 
   // Run check-in section (only if today has a non-Rest run)
   const runCheckInEl = document.getElementById('run-checkin-section');
