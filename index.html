@@ -1951,7 +1951,7 @@ function saveCheckIn(dateISO, type, data) {
 }
 
 // In-memory state for the check-in form (one row at a time)
-let checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '' };
+let checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '', actualType: '' };
 
 function openCheckInForm(type, existing) {
   checkInForm = {
@@ -1961,7 +1961,8 @@ function openCheckInForm(type, existing) {
     note: existing ? (existing.note || '') : '',
     distance: existing ? (existing.distance || '') : '',
     duration: existing ? (existing.duration || '') : '',
-    avgHR: existing ? (existing.avgHR || '') : ''
+    avgHR: existing ? (existing.avgHR || '') : '',
+    actualType: existing ? (existing.actualType || '') : ''
   };
   renderHome(); // re-render with form open
 }
@@ -1993,14 +1994,15 @@ function submitCheckIn() {
     if (checkInForm.distance) data.distance = parseFloat(checkInForm.distance) || null;
     if (checkInForm.duration) data.duration = checkInForm.duration;
     if (checkInForm.avgHR)    data.avgHR    = parseInt(checkInForm.avgHR) || null;
+    if (checkInForm.actualType) data.actualType = checkInForm.actualType;
   }
   saveCheckIn(todayISO(), checkInForm.type, data);
-  checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '' };
+  checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '', actualType: '' };
   renderHome();
 }
 
 function cancelCheckIn() {
-  checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '' };
+  checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '', actualType: '' };
   renderHome();
 }
 
@@ -2031,8 +2033,19 @@ async function uploadRunScreenshot(fileInput) {
     if (d.distance != null) checkInForm.distance = String(d.distance);
     if (d.duration)         checkInForm.duration = d.duration;
     if (d.avgHR != null)    checkInForm.avgHR    = String(d.avgHR);
-    // Auto-set status to done since they have a screenshot of a completed run
-    if (!checkInForm.status) checkInForm.status = 'done';
+    if (d.type)             checkInForm.actualType = d.type;
+
+    // If actual type differs from planned, auto-set status to "modified"
+    // Otherwise default to "done"
+    const wkIdx = getCurrentWeekIndex();
+    const week = plan && plan.weeks && plan.weeks[wkIdx];
+    const today = week && week.days && week.days[getCurrentDayIndex()];
+    const plannedType = today ? today.type : '';
+    if (d.type && plannedType && d.type !== plannedType && d.type !== 'Other') {
+      checkInForm.status = 'modified';
+    } else if (!checkInForm.status) {
+      checkInForm.status = 'done';
+    }
   } catch (e) {
     alert('Could not parse screenshot: ' + e.message);
   } finally {
@@ -2110,6 +2123,7 @@ function gatherWeekData(weekIdx) {
       status: ci ? ci.status : null,
       rpe: ci ? ci.rpe : null,
       note: ci ? ci.note : null,
+      actualType: ci ? ci.actualType : null,
       actualDistance: ci ? ci.distance : null,
       actualDuration: ci ? ci.duration : null,
       actualHR: ci ? ci.avgHR : null
@@ -2792,6 +2806,26 @@ function renderCheckInCard(type, summary) {
     const rpeText = existing.rpe ? ` · RPE ${existing.rpe}/10` : '';
     const noteText = existing.note ? `<div class="checkin-meta">"${escape(existing.note)}"</div>` : '';
 
+    // Use actual type if logged, fall back to planned summary
+    let displaySummary = summary;
+    if (type === 'run' && existing.actualType) {
+      const icon = TYPE_ICONS[existing.actualType] || '🏃';
+      const milesText = existing.distance ? ` · ${existing.distance} mi` : '';
+      displaySummary = `${icon} ${existing.actualType}${milesText}`;
+    }
+
+    // Show "instead of planned X" if different
+    let plannedHint = '';
+    if (type === 'run' && existing.actualType) {
+      // Find the planned type for today
+      const wkIdx = getCurrentWeekIndex();
+      const week = plan && plan.weeks && plan.weeks[wkIdx];
+      const todayPlanned = week && week.days && week.days[getCurrentDayIndex()];
+      if (todayPlanned && todayPlanned.type !== existing.actualType) {
+        plannedHint = `<div class="checkin-meta" style="color:var(--ink-light);font-size:11px;">Instead of planned ${escape(todayPlanned.type)}</div>`;
+      }
+    }
+
     // Run metrics row (only if logged)
     let metricsRow = '';
     if (type === 'run' && (existing.distance || existing.duration || existing.avgHR)) {
@@ -2807,9 +2841,10 @@ function renderCheckInCard(type, summary) {
     return `
       <div class="checkin-card ${status}">
         <div class="checkin-head">
-          <div class="checkin-summary">${summary}</div>
+          <div class="checkin-summary">${displaySummary}</div>
           <div class="checkin-status" style="background:${statusColor}22;color:${statusColor}">${statusLabel}</div>
         </div>
+        ${plannedHint}
         ${metricsRow}
         ${rpeText ? `<div class="checkin-meta">${rpeText.slice(3)}</div>` : ''}
         ${noteText}
@@ -2872,9 +2907,17 @@ function renderCheckInCard(type, summary) {
     <div class="live-pace">Pace: <span id="live-pace-${type}">${livePace || '—'}</span></div>
   ` : '';
 
+  // Detected type hint
+  let detectedHint = '';
+  if (type === 'run' && checkInForm.actualType) {
+    const icon = TYPE_ICONS[checkInForm.actualType] || '🏃';
+    detectedHint = `<div class="checkin-meta" style="margin-top:4px;color:var(--accent);">Detected: ${icon} ${escape(checkInForm.actualType)}</div>`;
+  }
+
   return `
     <div class="checkin-card">
       <div class="checkin-summary">${summary}</div>
+      ${detectedHint}
       <div class="checkin-actions">${statusBtns}</div>
       <div style="font-size:11px;color:var(--ink-light);margin-top:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">RPE — how hard?</div>
       <div class="rpe-row">${rpeBtns.join('')}</div>
