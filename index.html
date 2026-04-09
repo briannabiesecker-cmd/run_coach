@@ -594,6 +594,101 @@
     margin-top: 2px;
   }
 
+  /* Weekly review card */
+  .review-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .review-empty {
+    text-align: center;
+    padding: 24px 16px;
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    margin-bottom: 12px;
+  }
+  .review-empty .icon { font-size: 32px; display: block; }
+  .review-empty .text {
+    font-size: 13px;
+    color: var(--ink-mid);
+    margin-top: 8px;
+    margin-bottom: 12px;
+  }
+  .review-week-tag {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .review-summary {
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.55;
+    margin-top: 8px;
+  }
+  .review-compliance {
+    margin-top: 14px;
+    background: var(--bg-elev-2);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .review-compliance .label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .review-compliance .value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    margin-top: 2px;
+  }
+  .review-observations {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .review-obs {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .review-obs .obs-icon { font-size: 16px; flex-shrink: 0; }
+  .review-recommendation {
+    margin-top: 14px;
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .review-recommendation .label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .review-meta {
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-align: right;
+    margin-top: 10px;
+  }
+
   /* Intention card */
   .intention-card {
     background: var(--bg-elev);
@@ -1411,7 +1506,10 @@
 
     <!-- ─── PERFORMANCE TAB ─── -->
     <div id="tab-performance" class="tab">
-      <div class="section-label">Pace Zones</div>
+      <div class="section-label">Weekly Review</div>
+      <div id="weekly-review-section"></div>
+
+      <div class="section-label" style="margin-top:16px;">Pace Zones</div>
       <div class="pace-grid" id="pace-zones"></div>
 
       <div class="section-label" style="margin-top:16px;">Plan Phases</div>
@@ -1497,6 +1595,7 @@ let strengthDraft = [];   // working copy while editing
 let prevView = 'dashboard'; // for cancel-strength-edit return path
 let checkIns = {};        // { "YYYY-MM-DD": { run: {status,rpe,note}, strength: {status,rpe,note} } }
 let wellness = {};        // { "YYYY-MM-DD": { sleep: 8, soreness: 3, loggedAt } }
+let weeklyReviews = {};   // { "<weekIdx>": { summary, compliancePct, observations, recommendation, generatedAt } }
 
 const DAYS_FULL = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const STATUS_LABELS = { done: '✓ Done', skipped: '✗ Skipped', modified: '⚙ Modified' };
@@ -1708,7 +1807,8 @@ function savePlan(p) {
     savedAt: new Date().toISOString(),
     strengthSchedule: strengthSchedule,
     checkIns: checkIns,
-    wellness: wellness
+    wellness: wellness,
+    weeklyReviews: weeklyReviews
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
@@ -1725,6 +1825,7 @@ function loadPlan() {
     strengthSchedule = data.strengthSchedule || [];
     checkIns = data.checkIns || {};
     wellness = data.wellness || {};
+    weeklyReviews = data.weeklyReviews || {};
     return true;
   } catch(e) { return false; }
 }
@@ -1792,6 +1893,137 @@ function submitCheckIn() {
 function cancelCheckIn() {
   checkInForm = { type: null, status: null, rpe: null, note: '' };
   renderHome();
+}
+
+// ════════════════════════════════════════════════════
+// WEEKLY REVIEW
+// ════════════════════════════════════════════════════
+let reviewLoading = false;
+
+function getReviewableWeekIdx() {
+  // Return the most recent week with check-in data, but not the current week
+  // (we want to review COMPLETED weeks, or current week if it has data)
+  if (!plan || !plan.weeks) return null;
+  const currentIdx = getCurrentWeekIndex();
+  // Prefer the previous completed week if it has data
+  if (currentIdx >= 1) {
+    const prevWeek = plan.weeks[currentIdx - 1];
+    if (prevWeek && weekHasAnyCheckIn(currentIdx - 1)) return currentIdx - 1;
+  }
+  // Otherwise, current week if it has data
+  if (weekHasAnyCheckIn(currentIdx)) return currentIdx;
+  return null;
+}
+
+function weekHasAnyCheckIn(weekIdx) {
+  if (!planStartDate) return false;
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(planStartDate + 'T00:00:00');
+    date.setDate(date.getDate() + weekIdx * 7 + i);
+    const iso = date.toISOString().slice(0, 10);
+    if (checkIns[iso] && (checkIns[iso].run || checkIns[iso].strength)) return true;
+  }
+  return false;
+}
+
+function gatherWeekData(weekIdx) {
+  const week = plan.weeks[weekIdx];
+  if (!week) return null;
+  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayLogs = [];
+  let sleepSum = 0, soreSum = 0, wellnessDays = 0;
+
+  (week.days || []).forEach((d, i) => {
+    const date = new Date(planStartDate + 'T00:00:00');
+    date.setDate(date.getDate() + weekIdx * 7 + i);
+    const iso = date.toISOString().slice(0, 10);
+    const ci = (checkIns[iso] && checkIns[iso].run) || null;
+    dayLogs.push({
+      day: dayLabels[i],
+      plannedType: d.type,
+      plannedMiles: d.miles || 0,
+      status: ci ? ci.status : null,
+      rpe: ci ? ci.rpe : null,
+      note: ci ? ci.note : null
+    });
+    if (wellness[iso]) {
+      sleepSum += wellness[iso].sleep || 0;
+      soreSum  += wellness[iso].soreness || 0;
+      wellnessDays++;
+    }
+  });
+
+  const wellnessAvg = wellnessDays > 0
+    ? { sleep: sleepSum / wellnessDays, soreness: soreSum / wellnessDays, daysLogged: wellnessDays }
+    : null;
+
+  // Race context
+  const raceInfo = {
+    name: plan.raceName || '',
+    distance: '',
+    date: plan.raceDate || '',
+    goalTime: '',
+    weeksOut: plan.weeks ? (plan.weeks.length - weekIdx - 1) : null
+  };
+
+  return {
+    weekData: {
+      week: week.week,
+      phase: week.phase,
+      focus: week.focus,
+      totalMiles: week.totalMiles
+    },
+    dayLogs: dayLogs,
+    wellnessAvg: wellnessAvg,
+    raceInfo: raceInfo
+  };
+}
+
+async function runWeeklyReview() {
+  const wkIdx = getReviewableWeekIdx();
+  if (wkIdx == null) {
+    alert('No check-in data yet to review. Log some workouts first.');
+    return;
+  }
+  reviewLoading = true;
+  renderPerformance();
+
+  try {
+    const payload = gatherWeekData(wkIdx);
+    if (!payload) throw new Error('Could not gather week data');
+    payload.action = 'weeklyReview';
+    payload.passcode = getPasscode();
+    payload.coachingStyle = 'encouraging'; // could read from plan if stored
+
+    const res = await postJson(payload);
+    if (res.error) {
+      if (res.error === 'Unauthorized') { clearPasscode(); showView('passcode'); return; }
+      throw new Error(res.error);
+    }
+    if (!res.success || !res.review) throw new Error('Empty review');
+
+    weeklyReviews[String(wkIdx)] = {
+      ...res.review,
+      generatedAt: new Date().toISOString(),
+      weekNumber: payload.weekData.week
+    };
+    persistWeeklyReviews();
+  } catch (e) {
+    alert('Review failed: ' + e.message);
+  } finally {
+    reviewLoading = false;
+    renderPerformance();
+  }
+}
+
+function persistWeeklyReviews() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    data.weeklyReviews = weeklyReviews;
+    data.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════
@@ -1922,6 +2154,7 @@ function resetPlan() {
   strengthSchedule = [];
   checkIns = {};
   wellness = {};
+  weeklyReviews = {};
   uploadedFiles = [];
   confirmedRace = null;
   document.getElementById('file-list').innerHTML = '';
@@ -2630,7 +2863,68 @@ function renderLog() {
 }
 
 // ─── PERFORMANCE TAB ───
+function renderWeeklyReviewSection() {
+  const wkIdx = getReviewableWeekIdx();
+  const el = document.getElementById('weekly-review-section');
+  if (!el) return;
+
+  if (reviewLoading) {
+    el.innerHTML = `<div class="loading-state"><div class="spinner"></div><div class="label">Reviewing your week…</div></div>`;
+    return;
+  }
+
+  if (wkIdx == null) {
+    el.innerHTML = `
+      <div class="review-empty">
+        <span class="icon">📋</span>
+        <div class="text">Log some workouts and check-ins this week, then come back for your coach's review.</div>
+      </div>`;
+    return;
+  }
+
+  const review = weeklyReviews[String(wkIdx)];
+
+  if (!review) {
+    el.innerHTML = `
+      <div class="review-empty">
+        <span class="icon">🪞</span>
+        <div class="text">Ready to review week ${plan.weeks[wkIdx].week}. Your coach will look at what you did and recommend adjustments.</div>
+        <button class="btn-primary" onclick="runWeeklyReview()" style="max-width:240px;margin:0 auto;">Generate review</button>
+      </div>`;
+    return;
+  }
+
+  const observations = (review.observations || []).map(o =>
+    `<div class="review-obs"><span class="obs-icon">${escape(o.icon || '•')}</span><span>${escape(o.text || '')}</span></div>`
+  ).join('');
+
+  const generated = review.generatedAt
+    ? new Date(review.generatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '';
+
+  el.innerHTML = `
+    <div class="review-card">
+      <div class="review-week-tag">Week ${review.weekNumber || (wkIdx + 1)} Review</div>
+      <div class="review-summary">${escape(review.summary || '')}</div>
+      ${review.compliancePct != null ? `
+        <div class="review-compliance">
+          <div class="label">Compliance</div>
+          <div class="value">${review.compliancePct}%</div>
+        </div>` : ''}
+      <div class="review-observations">${observations}</div>
+      ${review.recommendation ? `
+        <div class="review-recommendation">
+          <span class="label">Next week</span>
+          ${escape(review.recommendation)}
+        </div>` : ''}
+      <div class="review-meta">Generated ${generated}</div>
+      <button class="btn-ghost" onclick="runWeeklyReview()" style="margin-top:10px;">Re-run review</button>
+    </div>`;
+}
+
 function renderPerformance() {
+  renderWeeklyReviewSection();
+
   // Pace zones
   const pz = plan.paceZones || {};
   const zones = [
