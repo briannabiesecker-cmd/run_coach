@@ -1156,7 +1156,129 @@
     min-height: 2px;
   }
   .chart-bar.current {
-    border: 1px solid var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 0 8px rgba(0,200,150,0.5);
+    border-radius: 3px 3px 0 0;
+  }
+
+  /* ─── Plan workout list (Runna-style day-by-day) ─── */
+  .plan-workout-list {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .plan-workout-list-label {
+    font-size: 10px;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .plan-workout-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .plan-workout-row:hover {
+    background: var(--bg-elev-2);
+  }
+  .plan-workout-row.today {
+    border-left-color: var(--accent);
+    background: rgba(0,200,150,0.06);
+  }
+  .plan-workout-row.long-run {
+    border-left-color: #f59e0b;
+  }
+  .plan-workout-row.done {
+    opacity: 0.78;
+    border-left-color: var(--accent);
+  }
+  .plan-workout-row.skipped {
+    opacity: 0.55;
+    border-left-color: #ef4444;
+  }
+  .plan-workout-row.rest {
+    background: transparent;
+    border-style: dashed;
+  }
+  .pwr-day {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--ink-light);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    width: 38px;
+    flex-shrink: 0;
+    text-align: center;
+  }
+  .pwr-day .pwr-day-num {
+    display: block;
+    font-size: 18px;
+    color: var(--ink);
+    font-weight: 900;
+    margin-top: 2px;
+  }
+  .pwr-icon {
+    font-size: 22px;
+    line-height: 1;
+    width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .pwr-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .pwr-headline {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .pwr-headline .pwr-miles {
+    color: var(--accent);
+    margin-left: 4px;
+  }
+  .pwr-meta {
+    font-size: 11px;
+    color: var(--ink-mid);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .pwr-meta .pwr-strength {
+    color: #c4b5fd;
+    font-weight: 700;
+  }
+  .pwr-status {
+    font-size: 10px;
+    font-weight: 800;
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .pwr-status.done { background: rgba(0,200,150,0.18); color: var(--accent); }
+  .pwr-status.skipped { background: rgba(239,68,68,0.18); color: #fca5a5; }
+  .pwr-status.modified { background: rgba(250,204,21,0.18); color: #facc15; }
+  .pwr-long-badge {
+    font-size: 9px;
+    font-weight: 900;
+    background: rgba(245,158,11,0.18);
+    color: #fbbf24;
+    padding: 2px 6px;
+    border-radius: 6px;
+    letter-spacing: 0.6px;
+    margin-left: 6px;
+    vertical-align: middle;
   }
   .chart-legend {
     display: flex;
@@ -4712,6 +4834,20 @@ function getPaceForWorkout(type) {
   return '';
 }
 
+// Parse a pace string like "11:15-11:50/mi" or "8:30/mi" → minutes per mile (midpoint)
+function parsePaceMinutes(paceStr) {
+  if (!paceStr) return null;
+  const matches = paceStr.match(/(\d+):(\d{2})/g);
+  if (!matches || !matches.length) return null;
+  const toMin = (m) => {
+    const [mm, ss] = m.split(':').map(Number);
+    return mm + ss / 60;
+  };
+  if (matches.length === 1) return toMin(matches[0]);
+  // Range — average the two
+  return (toMin(matches[0]) + toMin(matches[1])) / 2;
+}
+
 function renderIntentionCard() {
   if (!plan || !plan.weeks) return '';
   const wkIdx = getCurrentWeekIndex();
@@ -5362,6 +5498,105 @@ function renderPlan() {
   const strengthPill = totalStrengthSessions > 0
     ? `<span class="week-pill" style="background:rgba(168,85,247,0.2);color:#c4b5fd;">💪 ${totalStrengthSessions}x</span>`
     : '';
+  // Find the long-run day (highest miles in the week, must be type Long if present)
+  let longRunIdx = -1;
+  let longRunMiles = 0;
+  (week.days || []).forEach((d, i) => {
+    if (d.type === 'Long' && (d.miles || 0) > longRunMiles) {
+      longRunMiles = d.miles;
+      longRunIdx = i;
+    }
+  });
+  // Fallback: if no Long type, mark the highest-miles day on a non-easy-only week
+  if (longRunIdx === -1) {
+    (week.days || []).forEach((d, i) => {
+      if ((d.miles || 0) > longRunMiles) { longRunMiles = d.miles; longRunIdx = i; }
+    });
+  }
+
+  // Build the day-by-day workout list (Runna-style)
+  const todayDayIdx = getCurrentDayIndex();
+  const workoutListRows = (week.days || []).map((d, i) => {
+    const isRest = d.type === 'Rest' || !d.miles;
+    const isToday = isCurrentWeek && i === todayDayIdx;
+    const isLong = i === longRunIdx && !isRest;
+    const dayShort = DAYS_FULL[i];
+    const dayStrength = getStrengthForDay(dayShort);
+    const icon = TYPE_ICONS[d.type] || (isRest ? '💤' : '🏃');
+
+    // Date for this day-cell (used to look up check-ins)
+    let dateLabel = '';
+    let cellISO = null;
+    if (planStartDate) {
+      const dt = new Date(planStartDate + 'T00:00:00');
+      dt.setDate(dt.getDate() + wkIdx * 7 + i);
+      cellISO = dt.toISOString().slice(0, 10);
+      dateLabel = String(dt.getDate());
+    }
+
+    // Completion state
+    const ci = cellISO && checkIns[cellISO] && checkIns[cellISO].run;
+    const status = ci && ci.status; // 'done' | 'skipped' | 'modified' | null
+    let stateClass = '';
+    let statusBadge = '';
+    if (status === 'done')     { stateClass = 'done';     statusBadge = '<div class="pwr-status done">✓ Done</div>'; }
+    else if (status === 'skipped')  { stateClass = 'skipped';  statusBadge = '<div class="pwr-status skipped">Skipped</div>'; }
+    else if (status === 'modified') { stateClass = 'modified'; statusBadge = '<div class="pwr-status modified">Modified</div>'; }
+
+    // Headline
+    let headline;
+    if (isRest) {
+      headline = 'Rest day';
+    } else {
+      const longBadge = isLong ? '<span class="pwr-long-badge">LONG</span>' : '';
+      headline = `${escape(d.type)}<span class="pwr-miles">${d.miles} mi</span>${longBadge}`;
+    }
+
+    // Meta line
+    const metaParts = [];
+    if (!isRest) {
+      const pace = getPaceForWorkout(d.type);
+      if (pace) metaParts.push(`${escape(pace)}`);
+      // Estimated minutes if we have pace
+      if (pace && d.miles) {
+        const paceMid = parsePaceMinutes(pace);
+        if (paceMid) {
+          const totalMin = Math.round(paceMid * d.miles);
+          metaParts.push(`~${totalMin} min`);
+        }
+      }
+      if (d.note) metaParts.push(escape(d.note));
+    } else {
+      metaParts.push('Recovery & adaptation');
+    }
+    if (dayStrength.length) {
+      const strLine = dayStrength.map(s => `${escape(s.time || '')} ${escape(s.label || 'Strength')}`.trim()).join(' · ');
+      metaParts.push(`<span class="pwr-strength">💪 ${strLine}</span>`);
+    }
+    const metaHTML = metaParts.length ? `<div class="pwr-meta">${metaParts.join(' · ')}</div>` : '';
+
+    const onClick = isCurrentWeek && !isRest ? `onclick="openSwapModal(${i})"` : '';
+
+    const rowClasses = [
+      'plan-workout-row',
+      isToday && 'today',
+      isLong && !stateClass && 'long-run',
+      isRest && 'rest',
+      stateClass
+    ].filter(Boolean).join(' ');
+
+    return `
+      <div class="${rowClasses}" ${onClick}>
+        <div class="pwr-day">${dayLabels[i]}<span class="pwr-day-num">${dateLabel || '–'}</span></div>
+        <div class="pwr-icon">${icon}</div>
+        <div class="pwr-body">
+          <div class="pwr-headline">${headline}</div>
+          ${metaHTML}
+        </div>
+        ${statusBadge}
+      </div>`;
+  }).join('');
+
   document.getElementById('plan-week-detail').innerHTML = `
     <div class="week-card${isCurrentWeek ? ' current' : ''}">
       <div class="week-card-head">
@@ -5378,7 +5613,9 @@ function renderPlan() {
       </div>
       <div class="day-mini-grid">${days}</div>
       ${isCurrentWeek ? '<div class="swap-hint">Tap a day to swap workouts</div>' : ''}
-    </div>`;
+    </div>
+    <div class="plan-workout-list-label">This week's workouts</div>
+    <div class="plan-workout-list">${workoutListRows}</div>`;
 
   // Mileage chart (full plan)
   const max = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
