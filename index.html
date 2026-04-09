@@ -2869,6 +2869,22 @@
     <button class="btn-primary" id="passcode-btn" onclick="submitPasscode()">Unlock</button>
   </div>
 
+  <!-- ═════════ NAME PROMPT VIEW ═════════ -->
+  <div id="view-name" class="view hidden">
+    <div class="setup-hero">
+      <div class="setup-icon">👋</div>
+      <div class="setup-title">Who are you?</div>
+      <div class="setup-sub">So your plan and log sync across devices</div>
+    </div>
+    <div id="name-alert" class="alert error hidden"></div>
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="name-input" autocomplete="off" placeholder="e.g. Brianna" />
+      <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">Used as your sync key. Pick something simple — first name works.</div>
+    </div>
+    <button class="btn-primary" id="name-btn" onclick="submitName()">Continue</button>
+  </div>
+
   <!-- ═════════ SETUP VIEW ═════════ -->
   <div id="view-setup" class="view">
     <div class="setup-hero">
@@ -3359,7 +3375,7 @@ function getPhaseColor(phaseName) {
 }
 
 function showView(name) {
-  ['consent', 'passcode', 'setup', 'loading', 'dashboard', 'strength', 'backfill'].forEach(v => {
+  ['consent', 'passcode', 'name', 'setup', 'loading', 'dashboard', 'strength', 'backfill'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
@@ -3457,6 +3473,7 @@ function persistStrengthOnly() {
     payload.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch(e) {}
+  pushToCloud();
 }
 
 function getStrengthForDay(dayShort) {
@@ -3467,6 +3484,145 @@ function getStrengthForDay(dayShort) {
 // ════════════════════════════════════════════════════
 // CONSENT
 // ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// USER IDENTITY (per-friend sync key)
+// ════════════════════════════════════════════════════
+const USER_NAME_KEY = 'runCoachUserName';
+let userName = '';
+
+function getUserName() {
+  if (userName) return userName;
+  userName = localStorage.getItem(USER_NAME_KEY) || '';
+  return userName;
+}
+
+function setUserName(name) {
+  userName = (name || '').trim();
+  if (userName) localStorage.setItem(USER_NAME_KEY, userName);
+}
+
+function submitName() {
+  const input = document.getElementById('name-input');
+  const val = input.value.trim();
+  if (!val) {
+    showNameAlert('Please enter a name');
+    return;
+  }
+  if (val.length > 30) {
+    showNameAlert('Keep it under 30 characters');
+    return;
+  }
+  setUserName(val);
+  // After setting the name, fetch this user's data from the cloud and
+  // route them to the right next view (dashboard if plan exists, setup if not)
+  hydrateFromCloudAndRoute();
+}
+
+function showNameAlert(msg) {
+  const el = document.getElementById('name-alert');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+// ════════════════════════════════════════════════════
+// CLOUD SYNC (Google Sheets via Apps Script)
+// ════════════════════════════════════════════════════
+//
+// Strategy: pull-on-load, push-on-save.
+// - On boot (after name is set): fetch the user's row from the sheet,
+//   merge into localStorage, then render.
+// - On every save event (plan generated, check-in, wellness, weekly
+//   review, profile update, strength schedule change): push the entire
+//   localStorage payload back to the sheet.
+// - Sheet always wins on load (single-device-at-a-time assumption).
+//
+// All cloud calls are best-effort. If they fail, the local state is
+// still authoritative — the user just doesn't get sync.
+
+let cloudSyncing = false;
+
+async function pullFromCloud() {
+  const name = getUserName();
+  if (!name) return null;
+  try {
+    const res = await postJson({
+      action: 'loadUserData',
+      passcode: getPasscode(),
+      userName: name
+    });
+    if (res.error) {
+      console.warn('Cloud pull failed:', res.error);
+      return null;
+    }
+    return res.payload || null;
+  } catch (e) {
+    console.warn('Cloud pull error:', e.message);
+    return null;
+  }
+}
+
+async function pushToCloud() {
+  const name = getUserName();
+  if (!name) return;
+  if (cloudSyncing) return; // simple in-flight guard
+  cloudSyncing = true;
+  try {
+    // Build the payload from current in-memory state — same shape we
+    // already write to localStorage.
+    const payload = {
+      plan: plan,
+      planStartDate: planStartDate,
+      strengthSchedule: strengthSchedule,
+      checkIns: checkIns,
+      wellness: wellness,
+      weeklyReviews: weeklyReviews,
+      runnerProfile: runnerProfile,
+      savedAt: new Date().toISOString()
+    };
+    const res = await postJson({
+      action: 'saveUserData',
+      passcode: getPasscode(),
+      userName: name,
+      payload: payload
+    });
+    if (res.error) console.warn('Cloud push failed:', res.error);
+  } catch (e) {
+    console.warn('Cloud push error:', e.message);
+  } finally {
+    cloudSyncing = false;
+  }
+}
+
+// Hydrate localStorage from a cloud payload, then route to dashboard or setup.
+async function hydrateFromCloudAndRoute() {
+  showView('loading');
+  const cloudPayload = await pullFromCloud();
+
+  if (cloudPayload && cloudPayload.plan) {
+    // Sheet has data — overwrite localStorage and load
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudPayload));
+    } catch(e) {}
+    if (loadPlan()) {
+      renderDashboard();
+      showView('dashboard');
+      return;
+    }
+  }
+  // No cloud data — but we may have local-only data from before sync existed.
+  // If localStorage already has a valid plan, push it up so this device
+  // becomes the source of truth (one-time migration).
+  if (loadPlan()) {
+    pushToCloud(); // fire-and-forget
+    renderDashboard();
+    showView('dashboard');
+    return;
+  }
+  // Truly empty — go to setup
+  loadRunnerProfile();
+  showView('setup');
+}
+
 function hasConsent() {
   return localStorage.getItem(CONSENT_KEY) === '1';
 }
@@ -3525,12 +3681,9 @@ function clearPasscode() {
 function routeNext() {
   if (!hasConsent()) { showView('consent'); return; }
   if (!getPasscode()) { showView('passcode'); return; }
-  if (loadPlan()) {
-    renderDashboard();
-    showView('dashboard');
-  } else {
-    showView('setup');
-  }
+  if (!getUserName()) { showView('name'); return; }
+  // Name + passcode known — pull latest data from the cloud and route.
+  hydrateFromCloudAndRoute();
 }
 
 function switchTab(tab) {
@@ -3570,6 +3723,7 @@ function savePlan(p) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
   planStartDate = payload.planStartDate;
+  pushToCloud(); // sync to Sheet (best-effort, async)
 }
 
 // Persist the runner profile independently of plan generation —
@@ -3582,6 +3736,7 @@ function saveRunnerProfile() {
     payload.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch(e) {}
+  pushToCloud();
 }
 
 // Migration: if an existing plan has a non-Monday planStartDate, snap it back
@@ -3664,6 +3819,7 @@ function saveCheckIn(dateISO, type, data) {
     payload.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch(e) {}
+  pushToCloud();
 }
 
 // In-memory state for the check-in form (one row at a time)
@@ -3986,6 +4142,7 @@ function persistWeeklyReviews() {
     data.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch(e) {}
+  pushToCloud();
 }
 
 function applyProposedChanges(reviewedWkIdx) {
@@ -4036,6 +4193,7 @@ function persistPlan() {
     payload.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch(e) {}
+  pushToCloud();
 }
 
 function openSwapModal(dayIdx) {
@@ -4111,6 +4269,7 @@ function saveWellness(dateISO, data) {
     payload.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch(e) {}
+  pushToCloud();
 }
 
 function openWellnessForm() {
@@ -4437,6 +4596,7 @@ function deleteLogEntry(date, type) {
     payload.savedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch(e) {}
+  pushToCloud();
   renderDashboard();
 }
 
@@ -6742,6 +6902,10 @@ init();
 // Submit passcode on Enter key
 document.getElementById('passcode-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') submitPasscode();
+});
+// Submit name on Enter key
+document.getElementById('name-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitName();
 });
 </script>
 </body>

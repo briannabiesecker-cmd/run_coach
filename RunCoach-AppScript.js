@@ -73,6 +73,14 @@ function doPost(e) {
       var auth4 = checkPasscode(body.passcode);
       if (!auth4.ok) { result = { error: auth4.error }; }
       else { result = parseRunScreenshot(body); }
+    } else if (action === 'loadUserData') {
+      var auth5 = checkPasscode(body.passcode);
+      if (!auth5.ok) { result = { error: auth5.error }; }
+      else { result = loadUserData(body); }
+    } else if (action === 'saveUserData') {
+      var auth6 = checkPasscode(body.passcode);
+      if (!auth6.ok) { result = { error: auth6.error }; }
+      else { result = saveUserData(body); }
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -83,6 +91,110 @@ function doPost(e) {
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ══════════════════════════════════════════════════
+// CLOUD STORAGE — Google Sheets backing store
+// ══════════════════════════════════════════════════
+//
+// Schema: a single Google Sheet with one tab "users", columns:
+//   A: userName    (lowercase, used as the key)
+//   B: payload     (full JSON blob — plan, checkIns, wellness, reviews,
+//                    profile, strengthSchedule, planStartDate, etc.)
+//   C: updatedAt   (ISO timestamp)
+//
+// The sheet ID is stored in script properties as DATA_SHEET_ID. On first
+// call, getOrCreateDataSheet() creates a new spreadsheet, sets up the
+// header row, and writes the ID to properties — so subsequent calls reuse
+// the same sheet (no duplicate-creation spam).
+
+function getOrCreateDataSheet() {
+  var props = PropertiesService.getScriptProperties();
+  var sheetId = props.getProperty('DATA_SHEET_ID');
+  var ss;
+  if (sheetId) {
+    try {
+      ss = SpreadsheetApp.openById(sheetId);
+    } catch (err) {
+      // ID was set but the sheet was deleted/unshared — fall through to
+      // create a new one rather than crashing every cloud action.
+      ss = null;
+    }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create('Run Coach Data');
+    props.setProperty('DATA_SHEET_ID', ss.getId());
+    var firstSheet = ss.getSheets()[0];
+    firstSheet.setName('users');
+    firstSheet.appendRow(['userName', 'payload', 'updatedAt']);
+    firstSheet.setFrozenRows(1);
+  }
+  // Ensure the "users" tab exists even if the spreadsheet was opened by ID
+  var usersSheet = ss.getSheetByName('users');
+  if (!usersSheet) {
+    usersSheet = ss.insertSheet('users');
+    usersSheet.appendRow(['userName', 'payload', 'updatedAt']);
+    usersSheet.setFrozenRows(1);
+  }
+  return usersSheet;
+}
+
+function findUserRow(sheet, userName) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  var names = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < names.length; i++) {
+    if (String(names[i][0]).toLowerCase() === userName.toLowerCase()) {
+      return i + 2; // 1-indexed + header offset
+    }
+  }
+  return -1;
+}
+
+function loadUserData(body) {
+  var userName = (body.userName || '').trim();
+  if (!userName) return { error: 'userName is required' };
+  try {
+    var sheet = getOrCreateDataSheet();
+    var rowIdx = findUserRow(sheet, userName);
+    if (rowIdx === -1) return { success: true, payload: null }; // new user
+    var payloadStr = sheet.getRange(rowIdx, 2).getValue();
+    var updatedAt  = sheet.getRange(rowIdx, 3).getValue();
+    if (!payloadStr) return { success: true, payload: null };
+    var parsed;
+    try { parsed = JSON.parse(payloadStr); }
+    catch (e) { return { error: 'Stored payload was malformed JSON: ' + String(e).slice(0, 200) }; }
+    return { success: true, payload: parsed, updatedAt: updatedAt };
+  } catch (err) {
+    return { error: 'loadUserData failed: ' + (err.message || String(err)) };
+  }
+}
+
+function saveUserData(body) {
+  var userName = (body.userName || '').trim();
+  if (!userName) return { error: 'userName is required' };
+  if (!body.payload) return { error: 'payload is required' };
+  try {
+    var payloadStr = JSON.stringify(body.payload);
+    // Google Sheets has a 50,000 character limit per cell. Detect early
+    // so we can return a clear error rather than letting setValue silently
+    // truncate.
+    if (payloadStr.length > 49500) {
+      return { error: 'Payload too large for Sheets (' + payloadStr.length + ' chars > 49500 limit). Trim check-in history or reduce plan size.' };
+    }
+    var sheet = getOrCreateDataSheet();
+    var rowIdx = findUserRow(sheet, userName);
+    var nowIso = new Date().toISOString();
+    if (rowIdx === -1) {
+      sheet.appendRow([userName, payloadStr, nowIso]);
+    } else {
+      sheet.getRange(rowIdx, 2).setValue(payloadStr);
+      sheet.getRange(rowIdx, 3).setValue(nowIso);
+    }
+    return { success: true, updatedAt: nowIso };
+  } catch (err) {
+    return { error: 'saveUserData failed: ' + (err.message || String(err)) };
+  }
 }
 
 // ──────────────────────────────────────────────────
