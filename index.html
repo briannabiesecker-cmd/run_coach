@@ -1479,11 +1479,21 @@ function renderHome() {
   document.getElementById('hero-tag').textContent =
     week ? `Week ${week.week} · ${week.phase || ''}` : 'Plan Complete';
 
+  // Check today's strength early so we can mention it in the hero
+  const todayShortHero = DAYS_FULL[dayIdx];
+  const todayStrengthHero = getStrengthForDay(todayShortHero);
+
   if (today) {
     const icon = TYPE_ICONS[today.type] || '🏃';
-    document.getElementById('hero-workout').textContent =
-      `${icon} ${today.type}${today.miles ? ' · ' + today.miles + ' mi' : ''}`;
-    document.getElementById('hero-meta').textContent = today.note || '';
+    let workoutText = `${icon} ${today.type}${today.miles ? ' · ' + today.miles + ' mi' : ''}`;
+    if (todayStrengthHero.length) workoutText += ' + 💪';
+    document.getElementById('hero-workout').textContent = workoutText;
+    let meta = today.note || '';
+    if (todayStrengthHero.length) {
+      const strSummary = todayStrengthHero.map(s => `${s.time}${s.label ? ' ' + s.label : ''}`).join(' · ');
+      meta = meta ? meta + '  ·  💪 ' + strSummary : '💪 ' + strSummary;
+    }
+    document.getElementById('hero-meta').textContent = meta;
   } else {
     document.getElementById('hero-workout').textContent = '🏁 Race time';
     document.getElementById('hero-meta').textContent = 'Trust your training';
@@ -1588,6 +1598,7 @@ function renderPlan() {
   // Week list — current and next 4
   const dayLetters = ['M','T','W','T','F','S','S'];
   const display = weeks.slice(wkIdx, wkIdx + 5);
+  const totalStrengthSessions = (strengthSchedule || []).length;
   document.getElementById('week-list').innerHTML = display.map((w, idx) => {
     const isCurrent = idx === 0;
     const phaseColor = getPhaseColor(w.phase);
@@ -1598,12 +1609,16 @@ function renderPlan() {
       const strMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
       return `<div class="day-mini${isRest ? ' rest' : ''}"><div class="label">${dayLetters[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
     }).join('');
+    const strengthPill = totalStrengthSessions > 0
+      ? `<span class="week-pill" style="background:rgba(168,85,247,0.2);color:#c4b5fd;">💪 ${totalStrengthSessions}x</span>`
+      : '';
     return `
       <div class="week-card${isCurrent ? ' current' : ''}">
         <div class="week-card-head">
           <div>
             <span class="week-num">WK ${w.week}</span>
             <span class="week-pill" style="background:${phaseColor}33;color:${phaseColor}">${escape(w.phase || '')}</span>
+            ${strengthPill}
             ${isCurrent ? '<span class="week-pill now">NOW</span>' : ''}
             <div class="week-focus">${escape(w.focus || '')}</div>
           </div>
