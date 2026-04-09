@@ -278,6 +278,7 @@ function weeklyReview(params) {
   lines.push('WEEK ' + (weekData.week || '?') + ' ACTUAL EXECUTION:');
   var totalDone = 0;
   var totalPlanned = 0;
+  var totalActualMi = 0;
   dayLogs.forEach(function(d) {
     var planned = d.plannedType + (d.plannedMiles ? ' ' + d.plannedMiles + ' mi' : '');
     if (d.plannedMiles && d.plannedType !== 'Rest') totalPlanned += d.plannedMiles;
@@ -285,8 +286,18 @@ function weeklyReview(params) {
       var statusLabel = d.status.toUpperCase();
       var rpeText = d.rpe ? ', RPE ' + d.rpe + '/10' : '';
       var noteText = d.note ? ', "' + d.note + '"' : '';
-      lines.push('- ' + d.day + ': planned ' + planned + ' → ' + statusLabel + rpeText + noteText);
-      if (d.status === 'done' && d.plannedMiles) totalDone += d.plannedMiles;
+      // Actual run metrics if logged
+      var actualParts = [];
+      if (d.actualDistance) actualParts.push(d.actualDistance + ' mi');
+      if (d.actualDuration) actualParts.push(d.actualDuration);
+      if (d.actualHR) actualParts.push('HR ' + d.actualHR);
+      var actualText = actualParts.length ? ', ACTUAL: ' + actualParts.join(' · ') : '';
+      lines.push('- ' + d.day + ': planned ' + planned + ' → ' + statusLabel + actualText + rpeText + noteText);
+      if (d.status === 'done') {
+        // Use actual distance if logged, otherwise fall back to planned
+        totalDone += (d.actualDistance || d.plannedMiles || 0);
+        if (d.actualDistance) totalActualMi += d.actualDistance;
+      }
     } else {
       lines.push('- ' + d.day + ': planned ' + planned + ' → NO LOG');
     }

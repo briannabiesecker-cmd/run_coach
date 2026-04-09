@@ -65,6 +65,10 @@ function doPost(e) {
       var auth2 = checkPasscode(body.passcode);
       if (!auth2.ok) { result = { error: auth2.error }; }
       else { result = lookupRace(body); }
+    } else if (action === 'weeklyReview') {
+      var auth3 = checkPasscode(body.passcode);
+      if (!auth3.ok) { result = { error: auth3.error }; }
+      else { result = weeklyReview(body); }
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -232,6 +236,123 @@ function lookupRace(params) {
   var parsed;
   try { parsed = JSON.parse(text); } catch(e) { return { error: 'Could not parse lookup response.' }; }
   return { success: true, race: parsed };
+}
+
+// ──────────────────────────────────────────────────
+// Weekly review: assess past week's execution and
+// recommend adjustments. Returns coaching JSON.
+// ──────────────────────────────────────────────────
+function weeklyReview(params) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return { error: 'GEMINI_API_KEY not set in script properties.' };
+
+  var weekData    = params.weekData    || {};   // { week, phase, focus, totalMiles, days }
+  var dayLogs     = params.dayLogs     || [];   // [{ day, plannedType, plannedMiles, status, rpe, note }]
+  var wellnessAvg = params.wellnessAvg || null; // { sleep, soreness, daysLogged }
+  var raceInfo    = params.raceInfo    || {};   // { name, date, distance, goalTime, weeksOut }
+  var coachingStyle = params.coachingStyle || 'encouraging';
+
+  var systemPrompt = [
+    'You are an experienced running coach reviewing your athlete\'s past training week.',
+    'Be honest. If they crushed it, say so. If they fell off, say so. No empty cheerleading.',
+    'Focus on patterns over individual workouts. The point is helping next week be better.',
+    'Tone: ' + (coachingStyle === 'tough-love' ? 'direct and pushy' :
+                coachingStyle === 'data-driven' ? 'analytical with reasoning' :
+                'warm and supportive')
+  ].join('\n');
+
+  // Build the data block
+  var lines = [];
+  lines.push('ATHLETE CONTEXT:');
+  if (raceInfo.name) lines.push('- Race: ' + raceInfo.name + (raceInfo.distance ? ' (' + raceInfo.distance + ')' : '') + (raceInfo.date ? ' on ' + raceInfo.date : ''));
+  if (raceInfo.goalTime) lines.push('- Goal time: ' + raceInfo.goalTime);
+  if (raceInfo.weeksOut) lines.push('- ' + raceInfo.weeksOut + ' weeks until race');
+  if (weekData.phase) lines.push('- Currently in ' + weekData.phase + ' phase');
+  lines.push('');
+
+  lines.push('WEEK ' + (weekData.week || '?') + ' PLANNED:');
+  lines.push('- Total: ' + (weekData.totalMiles || 0) + ' miles');
+  if (weekData.focus) lines.push('- Focus: ' + weekData.focus);
+  lines.push('');
+
+  lines.push('WEEK ' + (weekData.week || '?') + ' ACTUAL EXECUTION:');
+  var totalDone = 0;
+  var totalPlanned = 0;
+  dayLogs.forEach(function(d) {
+    var planned = d.plannedType + (d.plannedMiles ? ' ' + d.plannedMiles + ' mi' : '');
+    if (d.plannedMiles && d.plannedType !== 'Rest') totalPlanned += d.plannedMiles;
+    if (d.status) {
+      var statusLabel = d.status.toUpperCase();
+      var rpeText = d.rpe ? ', RPE ' + d.rpe + '/10' : '';
+      var noteText = d.note ? ', "' + d.note + '"' : '';
+      lines.push('- ' + d.day + ': planned ' + planned + ' → ' + statusLabel + rpeText + noteText);
+      if (d.status === 'done' && d.plannedMiles) totalDone += d.plannedMiles;
+    } else {
+      lines.push('- ' + d.day + ': planned ' + planned + ' → NO LOG');
+    }
+  });
+  var pct = totalPlanned > 0 ? Math.round((totalDone / totalPlanned) * 100) : 0;
+  lines.push('');
+  lines.push('TOTAL: ' + totalDone + ' of ' + totalPlanned + ' planned miles (' + pct + '%)');
+  lines.push('');
+
+  if (wellnessAvg && wellnessAvg.daysLogged > 0) {
+    lines.push('WELLNESS THIS WEEK (avg of ' + wellnessAvg.daysLogged + ' days):');
+    lines.push('- Sleep: ' + wellnessAvg.sleep.toFixed(1) + '/10 (1=terrible, 10=great)');
+    lines.push('- Soreness: ' + wellnessAvg.soreness.toFixed(1) + '/10 (1=none, 10=very sore)');
+    lines.push('');
+  } else {
+    lines.push('WELLNESS: not logged this week');
+    lines.push('');
+  }
+
+  lines.push('Return ONLY valid JSON in this exact structure:');
+  lines.push('{');
+  lines.push('  "summary": "1-2 sentence honest assessment of how the week went",');
+  lines.push('  "compliancePct": ' + pct + ',');
+  lines.push('  "observations": [');
+  lines.push('    {"icon": "✅"|"⚠️"|"💤"|"💪"|"📈"|"🎯", "text": "specific observation about this week"}');
+  lines.push('  ],');
+  lines.push('  "recommendation": "1-2 sentence specific direction for next week"');
+  lines.push('}');
+  lines.push('');
+  lines.push('Rules:');
+  lines.push('- 3 to 5 observations max.');
+  lines.push('- Make observations actionable, not generic.');
+  lines.push('- The recommendation should be specific (e.g. "hold mileage at X" not "keep training").');
+  lines.push('- Return JSON only, no markdown fences.');
+
+  var userPrompt = lines.join('\n');
+
+  var payload = {
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.5,
+      response_mime_type: 'application/json'
+    }
+  };
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  if (response.getResponseCode() !== 200) {
+    return { error: 'Review failed: ' + response.getContentText().slice(0, 300) };
+  }
+
+  var data = JSON.parse(response.getContentText());
+  var text = data.candidates && data.candidates[0] && data.candidates[0].content
+    ? data.candidates[0].content.parts.map(function(p) { return p.text || ''; }).join('')
+    : '';
+
+  var parsed;
+  try { parsed = JSON.parse(text); } catch(e) { return { error: 'Could not parse review response.' }; }
+  return { success: true, review: parsed };
 }
 
 function buildSystemPrompt(style) {

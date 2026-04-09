@@ -1143,6 +1143,74 @@
     text-decoration: underline;
     padding: 0;
   }
+  .run-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .run-fields label {
+    font-size: 10px;
+    color: var(--ink-light);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .run-fields input {
+    width: 100%;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .run-fields input:focus { outline: none; border-color: var(--accent); }
+  .run-fields .hint {
+    font-size: 9px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
+  .live-pace {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 8px;
+    text-align: center;
+  }
+  .live-pace span {
+    color: var(--accent);
+    font-weight: 800;
+  }
+  .metrics-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    margin-bottom: 6px;
+  }
+  .metric-pill {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 4px;
+    text-align: center;
+  }
+  .metric-pill .m-label {
+    font-size: 9px;
+    color: var(--ink-light);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .metric-pill .m-val {
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 700;
+    margin-top: 2px;
+  }
 
   /* Today's strength card */
   .strength-today-card {
@@ -1851,14 +1919,17 @@ function saveCheckIn(dateISO, type, data) {
 }
 
 // In-memory state for the check-in form (one row at a time)
-let checkInForm = { type: null, status: null, rpe: null, note: '' };
+let checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '' };
 
 function openCheckInForm(type, existing) {
   checkInForm = {
     type,
     status: existing ? existing.status : null,
     rpe: existing ? existing.rpe : null,
-    note: existing ? (existing.note || '') : ''
+    note: existing ? (existing.note || '') : '',
+    distance: existing ? (existing.distance || '') : '',
+    duration: existing ? (existing.duration || '') : '',
+    avgHR: existing ? (existing.avgHR || '') : ''
   };
   renderHome(); // re-render with form open
 }
@@ -1885,14 +1956,43 @@ function submitCheckIn() {
     note: checkInForm.note,
     loggedAt: new Date().toISOString()
   };
+  // Only attach run metrics for run check-ins
+  if (checkInForm.type === 'run') {
+    if (checkInForm.distance) data.distance = parseFloat(checkInForm.distance) || null;
+    if (checkInForm.duration) data.duration = checkInForm.duration;
+    if (checkInForm.avgHR)    data.avgHR    = parseInt(checkInForm.avgHR) || null;
+  }
   saveCheckIn(todayISO(), checkInForm.type, data);
-  checkInForm = { type: null, status: null, rpe: null, note: '' };
+  checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '' };
   renderHome();
 }
 
 function cancelCheckIn() {
-  checkInForm = { type: null, status: null, rpe: null, note: '' };
+  checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '' };
   renderHome();
+}
+
+function updateCheckInField(field, value) {
+  checkInForm[field] = value;
+}
+
+// Pace calculator: distance (mi) + duration (h:mm:ss or m:ss) → "M:SS/mi"
+function parseDurationToMinutes(s) {
+  if (!s) return 0;
+  const parts = String(s).split(':').map(p => parseInt(p) || 0);
+  if (parts.length === 3) return parts[0] * 60 + parts[1] + parts[2] / 60;
+  if (parts.length === 2) return parts[0] + parts[1] / 60;
+  return parseFloat(s) || 0;
+}
+
+function calcPace(distance, duration) {
+  const dist = parseFloat(distance);
+  const mins = parseDurationToMinutes(duration);
+  if (!dist || !mins) return '';
+  const paceMin = mins / dist;
+  const m = Math.floor(paceMin);
+  const s = Math.round((paceMin - m) * 60);
+  return `${m}:${String(s).padStart(2, '0')}/mi`;
 }
 
 // ════════════════════════════════════════════════════
@@ -1944,7 +2044,10 @@ function gatherWeekData(weekIdx) {
       plannedMiles: d.miles || 0,
       status: ci ? ci.status : null,
       rpe: ci ? ci.rpe : null,
-      note: ci ? ci.note : null
+      note: ci ? ci.note : null,
+      actualDistance: ci ? ci.distance : null,
+      actualDuration: ci ? ci.duration : null,
+      actualHR: ci ? ci.avgHR : null
     });
     if (wellness[iso]) {
       sleepSum += wellness[iso].sleep || 0;
@@ -2623,12 +2726,26 @@ function renderCheckInCard(type, summary) {
     const statusColor = STATUS_COLORS[status] || 'var(--ink-light)';
     const rpeText = existing.rpe ? ` · RPE ${existing.rpe}/10` : '';
     const noteText = existing.note ? `<div class="checkin-meta">"${escape(existing.note)}"</div>` : '';
+
+    // Run metrics row (only if logged)
+    let metricsRow = '';
+    if (type === 'run' && (existing.distance || existing.duration || existing.avgHR)) {
+      const pace = calcPace(existing.distance, existing.duration);
+      const parts = [];
+      if (existing.distance) parts.push(`<div class="metric-pill"><div class="m-label">Dist</div><div class="m-val">${existing.distance} mi</div></div>`);
+      if (existing.duration) parts.push(`<div class="metric-pill"><div class="m-label">Time</div><div class="m-val">${escape(existing.duration)}</div></div>`);
+      if (pace)              parts.push(`<div class="metric-pill"><div class="m-label">Pace</div><div class="m-val">${pace}</div></div>`);
+      if (existing.avgHR)    parts.push(`<div class="metric-pill"><div class="m-label">HR</div><div class="m-val">${existing.avgHR}</div></div>`);
+      metricsRow = `<div class="metrics-row">${parts.join('')}</div>`;
+    }
+
     return `
       <div class="checkin-card ${status}">
         <div class="checkin-head">
           <div class="checkin-summary">${summary}</div>
           <div class="checkin-status" style="background:${statusColor}22;color:${statusColor}">${statusLabel}</div>
         </div>
+        ${metricsRow}
         ${rpeText ? `<div class="checkin-meta">${rpeText.slice(3)}</div>` : ''}
         ${noteText}
         <button class="checkin-edit-link" onclick="openCheckInForm('${type}', ${JSON.stringify(existing).replace(/"/g, '&quot;')})">Edit</button>
@@ -2658,12 +2775,37 @@ function renderCheckInCard(type, summary) {
     rpeBtns.push(`<div class="rpe-dot ${active}" onclick="selectRPE(${i})">${i}</div>`);
   }
 
+  // Run metrics inputs (only for run check-ins)
+  const livePace = type === 'run' ? calcPace(checkInForm.distance, checkInForm.duration) : '';
+  const runFields = type === 'run' ? `
+    <div style="font-size:11px;color:var(--ink-light);margin-top:14px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Run details (optional)</div>
+    <div class="run-fields">
+      <div>
+        <label>Distance</label>
+        <input type="number" step="0.01" placeholder="4.5" value="${escape(checkInForm.distance || '')}" oninput="updateCheckInField('distance', this.value); document.getElementById('live-pace-${type}').textContent = calcPace(this.value, document.getElementById('dur-${type}').value)" />
+        <div class="hint">miles</div>
+      </div>
+      <div>
+        <label>Duration</label>
+        <input type="text" id="dur-${type}" placeholder="42:30" value="${escape(checkInForm.duration || '')}" oninput="updateCheckInField('duration', this.value); document.getElementById('live-pace-${type}').textContent = calcPace(document.querySelector('.run-fields input[type=number]').value, this.value)" />
+        <div class="hint">m:ss or h:mm:ss</div>
+      </div>
+      <div>
+        <label>Avg HR</label>
+        <input type="number" placeholder="155" value="${escape(checkInForm.avgHR || '')}" oninput="updateCheckInField('avgHR', this.value)" />
+        <div class="hint">bpm</div>
+      </div>
+    </div>
+    <div class="live-pace">Pace: <span id="live-pace-${type}">${livePace || '—'}</span></div>
+  ` : '';
+
   return `
     <div class="checkin-card">
       <div class="checkin-summary">${summary}</div>
       <div class="checkin-actions">${statusBtns}</div>
       <div style="font-size:11px;color:var(--ink-light);margin-top:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">RPE — how hard?</div>
       <div class="rpe-row">${rpeBtns.join('')}</div>
+      ${runFields}
       <input type="text" class="checkin-note-input" id="checkin-note-${type}" placeholder="Optional note (e.g. legs felt heavy)" value="${escape(checkInForm.note || '')}" oninput="updateCheckInNote(this.value)" />
       <button class="checkin-save" onclick="submitCheckIn()" ${!checkInForm.status ? 'disabled' : ''}>Save</button>
       <button class="checkin-edit-link" style="display:block;margin:8px auto 0;" onclick="cancelCheckIn()">Cancel</button>
