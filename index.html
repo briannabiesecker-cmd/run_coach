@@ -5345,13 +5345,34 @@ function renderMileageProgressionChart() {
 
   const weeks = plan.weeks;
   const currentIdx = getCurrentWeekIndex();
+  const todayDayIdx = getCurrentDayIndex();
 
-  // Compute totals — plan window only (no historical pollution)
+  // Compute totals — only count days that have actually elapsed (through today)
   let totalPlanned = 0;
   let totalActual = 0;
   for (let i = 0; i <= currentIdx && i < weeks.length; i++) {
-    totalPlanned += weeks[i].totalMiles || 0;
-    totalActual += actualMilesForWeek(i);
+    const w = weeks[i];
+    if (i < currentIdx) {
+      // Past weeks — count the full week
+      totalPlanned += w.totalMiles || 0;
+      totalActual += actualMilesForWeek(i);
+    } else {
+      // Current week — only days through today (inclusive)
+      if (w.days) {
+        for (let di = 0; di <= todayDayIdx && di < w.days.length; di++) {
+          totalPlanned += w.days[di].miles || 0;
+          if (planStartDate) {
+            const dt = new Date(planStartDate + 'T00:00:00');
+            dt.setDate(dt.getDate() + i * 7 + di);
+            const iso = dt.toISOString().slice(0, 10);
+            const ci = checkIns[iso] && checkIns[iso].run;
+            if (ci && ci.status === 'done') {
+              totalActual += ci.distance || w.days[di].miles || 0;
+            }
+          }
+        }
+      }
+    }
   }
   const compliance = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
   const complianceClass = compliance >= 80 ? '' : compliance >= 50 ? 'warn' : 'bad';
