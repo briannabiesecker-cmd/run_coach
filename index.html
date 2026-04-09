@@ -2927,18 +2927,54 @@
         <input type="number" id="weekly-mileage" min="0" max="200" placeholder="15" />
       </div>
       <div class="field">
+        <label>Longest recent run (mi)</label>
+        <input type="number" id="longest-recent-run" min="0" max="50" step="0.1" placeholder="6" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
         <label>Goal finish time</label>
         <input type="text" id="goal-time" placeholder="4:30:00" />
+      </div>
+      <div class="field">
+        <label>Days/week available</label>
+        <select id="days-per-week">
+          <option value="">Choose…</option>
+          <option value="3">3 days</option>
+          <option value="4">4 days</option>
+          <option value="5">5 days</option>
+          <option value="6">6 days</option>
+          <option value="7">7 days</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Long run preferred day</label>
+        <select id="long-run-day">
+          <option value="">Choose…</option>
+          <option value="Sat">Saturday</option>
+          <option value="Sun">Sunday</option>
+          <option value="Fri">Friday</option>
+          <option value="Mon">Monday</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Coaching style</label>
+        <select id="coaching-style">
+          <option value="encouraging">Encouraging</option>
+          <option value="data-driven">Data-driven</option>
+          <option value="tough-love">Tough love</option>
+        </select>
       </div>
     </div>
 
     <div class="field">
-      <label>Coaching style</label>
-      <select id="coaching-style">
-        <option value="encouraging">Encouraging — supportive and warm</option>
-        <option value="data-driven">Data-driven — analytical</option>
-        <option value="tough-love">Tough love — direct</option>
-      </select>
+      <label>Injuries or limitations (optional)</label>
+      <input type="text" id="injury-notes" placeholder="e.g. tight left IT band, no hills" />
+      <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">Anything currently bothering you. Plain language is fine.</div>
     </div>
 
     <div class="field">
@@ -3280,6 +3316,7 @@ let strengthSchedule = [];// [{ day: "Wed", time: "08:00", label: "Lower body" }
 let strengthDraft = [];   // working copy while editing
 let prevView = 'dashboard'; // for cancel-strength-edit return path
 let checkIns = {};        // { "YYYY-MM-DD": { run: {status,rpe,note}, strength: {status,rpe,note} } }
+let runnerProfile = {};   // { weeklyMileage, goalTime, coachingStyle, daysPerWeek, longestRecentRun, longRunDay, injuryNotes, raceName, raceDistance, raceDate }
 let wellness = {};        // { "YYYY-MM-DD": { sleep: 8, soreness: 3, loggedAt } }
 let weeklyReviews = {};   // { "<weekIdx>": { summary, compliancePct, observations, recommendation, generatedAt } }
 
@@ -3326,6 +3363,28 @@ function showView(name) {
     document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
+  if (name === 'setup') prefillSetupForm();
+}
+
+// Pre-fill the setup form with the runner profile so they don't
+// re-enter the same info every time. Race-specific fields (name,
+// distance, date) are NOT pre-filled because they typically change
+// per plan generation.
+function prefillSetupForm() {
+  // Make sure runnerProfile is loaded even if there's no plan yet
+  if (!Object.keys(runnerProfile).length) loadRunnerProfile();
+  const p = runnerProfile || {};
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  };
+  setVal('weekly-mileage',     p.weeklyMileage);
+  setVal('longest-recent-run', p.longestRecentRun);
+  setVal('goal-time',          p.goalTime);
+  setVal('days-per-week',      p.daysPerWeek);
+  setVal('long-run-day',       p.longRunDay);
+  setVal('coaching-style',     p.coachingStyle || 'encouraging');
+  setVal('injury-notes',       p.injuryNotes);
 }
 
 // ════════════════════════════════════════════════════
@@ -3505,11 +3564,24 @@ function savePlan(p) {
     strengthSchedule: strengthSchedule,
     checkIns: checkIns,
     wellness: wellness,
-    weeklyReviews: weeklyReviews
+    weeklyReviews: weeklyReviews,
+    runnerProfile: runnerProfile
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
   planStartDate = payload.planStartDate;
+}
+
+// Persist the runner profile independently of plan generation —
+// used when the user opens Settings → Profile and edits fields.
+function saveRunnerProfile() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : {};
+    payload.runnerProfile = runnerProfile;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
 }
 
 // Migration: if an existing plan has a non-Monday planStartDate, snap it back
@@ -3544,9 +3616,21 @@ function loadPlan() {
     checkIns = data.checkIns || {};
     wellness = data.wellness || {};
     weeklyReviews = data.weeklyReviews || {};
+    runnerProfile = data.runnerProfile || {};
     ensurePlanStartIsMonday(); // migrate old plans whose start wasn't a Monday
     return true;
   } catch(e) { return false; }
+}
+
+// Load profile only (used on first app load when there's no plan yet,
+// so re-entering the setup form pre-fills with last known values).
+function loadRunnerProfile() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    runnerProfile = data.runnerProfile || {};
+  } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════
@@ -4723,19 +4807,42 @@ async function submitForm() {
     date     = document.getElementById('race-date').value;
     raceName = document.getElementById('race-name').value;
   }
-  const mileage  = document.getElementById('weekly-mileage').value;
-  const goal     = document.getElementById('goal-time').value;
-  const style    = document.getElementById('coaching-style').value;
+  const mileage          = document.getElementById('weekly-mileage').value;
+  const goal             = document.getElementById('goal-time').value;
+  const style            = document.getElementById('coaching-style').value;
+  const longestRecentRun = document.getElementById('longest-recent-run').value;
+  const daysPerWeek      = document.getElementById('days-per-week').value;
+  const longRunDay       = document.getElementById('long-run-day').value;
+  const injuryNotes      = document.getElementById('injury-notes').value;
 
   if (!distance || !date) {
     showFormAlert('Please find a race or enter the date manually.');
     document.getElementById('race-manual-fields').classList.remove('hidden');
     return;
   }
+  if (!daysPerWeek) {
+    showFormAlert('Please pick how many days per week you can train.');
+    return;
+  }
   if (!SCRIPT_URL) {
     showFormAlert('Server URL not configured.');
     return;
   }
+
+  // Update the runner profile so future form opens are pre-filled
+  runnerProfile = {
+    weeklyMileage: mileage,
+    longestRecentRun: longestRecentRun,
+    goalTime: goal,
+    daysPerWeek: daysPerWeek,
+    longRunDay: longRunDay,
+    coachingStyle: style,
+    injuryNotes: injuryNotes,
+    raceName: raceName,
+    raceDistance: distance,
+    raceDate: date
+  };
+  saveRunnerProfile();
 
   showView('loading');
 
@@ -4747,8 +4854,12 @@ async function submitForm() {
       raceDate: date,
       raceName: raceName,
       weeklyMileage: mileage,
+      longestRecentRun: longestRecentRun,
       goalTime: goal,
+      daysPerWeek: daysPerWeek,
+      longRunDay: longRunDay,
       coachingStyle: style,
+      injuryNotes: injuryNotes,
       strengthSchedule: strengthSchedule,
       screenshots: uploadedFiles.map(f => f.base64)
     });

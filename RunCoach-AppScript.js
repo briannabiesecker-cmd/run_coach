@@ -101,11 +101,15 @@ function coach(params) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return { error: 'GEMINI_API_KEY not set in script properties.' };
 
-  var raceDate      = params.raceDate || '';
-  var raceDistance  = params.raceDistance || '';
-  var weeklyMileage = params.weeklyMileage || '';
-  var goalTime      = params.goalTime || '';
-  var coachingStyle = params.coachingStyle || 'encouraging';
+  var raceDate         = params.raceDate || '';
+  var raceDistance     = params.raceDistance || '';
+  var weeklyMileage    = params.weeklyMileage || '';
+  var goalTime         = params.goalTime || '';
+  var coachingStyle    = params.coachingStyle || 'encouraging';
+  var longestRecentRun = params.longestRecentRun || '';
+  var daysPerWeek      = params.daysPerWeek || '';
+  var longRunDay       = params.longRunDay || '';
+  var injuryNotes      = params.injuryNotes || '';
   // strengthSchedule arrives as an array of { day, time, label }
   var strengthSchedule = Array.isArray(params.strengthSchedule) ? params.strengthSchedule : [];
   // screenshots may arrive as an array (POST body) or comma-separated string (JSONP GET)
@@ -122,7 +126,18 @@ function coach(params) {
 
   // Build prompt
   var systemPrompt = buildSystemPrompt(coachingStyle);
-  var userPrompt   = buildUserPrompt(raceDate, raceDistance, weeklyMileage, goalTime, screenshots.length, strengthSchedule);
+  var userPrompt   = buildUserPrompt({
+    raceDate: raceDate,
+    distance: raceDistance,
+    mileage: weeklyMileage,
+    goal: goalTime,
+    longestRecentRun: longestRecentRun,
+    daysPerWeek: daysPerWeek,
+    longRunDay: longRunDay,
+    injuryNotes: injuryNotes,
+    screenshotCount: screenshots.length,
+    strengthSchedule: strengthSchedule
+  });
 
   // Build Gemini parts: text + inline images
   var parts = [{ text: userPrompt }];
@@ -795,32 +810,45 @@ function buildSystemPrompt(style) {
   ].join('\n');
 }
 
-function buildUserPrompt(raceDate, distance, mileage, goal, screenshotCount, strengthSchedule) {
+function buildUserPrompt(p) {
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var lines = [
     'Today is ' + today + '.',
-    'Race: ' + distance + ' on ' + raceDate + '.',
-    mileage ? 'Current weekly mileage: ' + mileage + ' miles per week.' : 'Weekly mileage not provided — assume beginner.',
-    goal ? 'Goal finish time: ' + goal + '.' : 'No goal time given — recommend a realistic target.',
-    screenshotCount > 0
-      ? 'I have attached ' + screenshotCount + ' Strava screenshot(s) of recent runs. Use them to assess my current fitness, pace, and patterns.'
-      : 'No run data attached.'
-  ];
+    '',
+    'RUNNER PROFILE:',
+    '  - Race: ' + p.distance + ' on ' + p.raceDate,
+    p.mileage ? '  - Current weekly mileage: ' + p.mileage + ' miles/week (this is the PRIMARY tier inference signal)' : '  - Weekly mileage not provided — assume NOVICE tier',
+    p.longestRecentRun ? '  - Longest recent run: ' + p.longestRecentRun + ' miles (use as a strong tier signal — a runner doing 25mi/wk with a 14mi long run is fitter than 25mi/wk with a 5mi long run)' : '  - Longest recent run: not provided',
+    p.goal ? '  - Goal finish time: ' + p.goal + ' (treat as a target, NOT proof of fitness — never let the goal promote the runner to a higher tier than mileage justifies)' : '  - No goal time given — recommend a realistic target based on inferred fitness',
+    p.daysPerWeek ? '  - Days per week available: ' + p.daysPerWeek + ' (HARD CONSTRAINT — the plan must fit within this many running days, no more)' : '  - Days per week: not specified, default to 4-5',
+    p.longRunDay ? '  - Long run preferred day: ' + p.longRunDay + ' (place the long run on this day each week unless a strength session conflicts)' : '  - Long run day: default to Saturday',
+    p.injuryNotes ? '  - Current injuries / limitations: ' + p.injuryNotes + ' (work around these — if the note suggests a specific area is at risk, soften the plan in that area; never coach through pain)' : '',
+    p.screenshotCount > 0
+      ? '  - I have attached ' + p.screenshotCount + ' Strava screenshot(s) of recent runs. Use them to verify my self-reported fitness and detect anything I missed.'
+      : '  - No run screenshots attached.'
+  ].filter(function(l) { return l.length > 0; });
 
   // Strength schedule constraint
-  if (strengthSchedule && strengthSchedule.length) {
+  if (p.strengthSchedule && p.strengthSchedule.length) {
     lines.push('');
     lines.push('STRENGTH CONSTRAINT — these are FIXED weekly strength sessions I cannot change. Build the running plan around them:');
-    strengthSchedule.forEach(function(s) {
+    p.strengthSchedule.forEach(function(s) {
       lines.push('  - ' + s.day + (s.time ? ' at ' + s.time : '') + (s.label ? ' (' + s.label + ')' : ''));
     });
     lines.push('Apply the strength scheduling rules from the system prompt: no long run on or after strength days, prefer easy/rest on strength days, etc.');
   } else {
-    lines.push('No strength schedule — you can place runs on any day.');
+    lines.push('');
+    lines.push('No strength schedule — you can place runs on any day (subject to the days-per-week constraint above).');
   }
 
   lines.push('');
+  lines.push('TIER INFERENCE — apply the rules from the system prompt:');
+  lines.push('  - Use my current weekly mileage as the primary tier signal');
+  lines.push('  - Use my longest recent run as a secondary signal');
+  lines.push('  - Pick the matching template variant (Novice / Intermediate / Advanced) for my race distance');
+  lines.push('  - If my goal time implies a tier I have not earned by mileage, STAY at the inferred tier and note in the plan summary that the goal may need to be revisited as fitness builds');
+  lines.push('');
   lines.push('Build a complete training plan from today through race week. Include a base-building phase if there is enough time.');
   lines.push('Return only the JSON. Be concise — focus on structure, not motivational text.');
-  return lines.filter(function(l) { return l.length > 0 || true; }).join('\n');
+  return lines.join('\n');
 }

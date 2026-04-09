@@ -101,11 +101,15 @@ function coach(params) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return { error: 'GEMINI_API_KEY not set in script properties.' };
 
-  var raceDate      = params.raceDate || '';
-  var raceDistance  = params.raceDistance || '';
-  var weeklyMileage = params.weeklyMileage || '';
-  var goalTime      = params.goalTime || '';
-  var coachingStyle = params.coachingStyle || 'encouraging';
+  var raceDate         = params.raceDate || '';
+  var raceDistance     = params.raceDistance || '';
+  var weeklyMileage    = params.weeklyMileage || '';
+  var goalTime         = params.goalTime || '';
+  var coachingStyle    = params.coachingStyle || 'encouraging';
+  var longestRecentRun = params.longestRecentRun || '';
+  var daysPerWeek      = params.daysPerWeek || '';
+  var longRunDay       = params.longRunDay || '';
+  var injuryNotes      = params.injuryNotes || '';
   // strengthSchedule arrives as an array of { day, time, label }
   var strengthSchedule = Array.isArray(params.strengthSchedule) ? params.strengthSchedule : [];
   // screenshots may arrive as an array (POST body) or comma-separated string (JSONP GET)
@@ -122,7 +126,18 @@ function coach(params) {
 
   // Build prompt
   var systemPrompt = buildSystemPrompt(coachingStyle);
-  var userPrompt   = buildUserPrompt(raceDate, raceDistance, weeklyMileage, goalTime, screenshots.length, strengthSchedule);
+  var userPrompt   = buildUserPrompt({
+    raceDate: raceDate,
+    distance: raceDistance,
+    mileage: weeklyMileage,
+    goal: goalTime,
+    longestRecentRun: longestRecentRun,
+    daysPerWeek: daysPerWeek,
+    longRunDay: longRunDay,
+    injuryNotes: injuryNotes,
+    screenshotCount: screenshots.length,
+    strengthSchedule: strengthSchedule
+  });
 
   // Build Gemini parts: text + inline images
   var parts = [{ text: userPrompt }];
@@ -570,51 +585,146 @@ function buildSystemPrompt(style) {
     '- Compress periodization to fit a tight deadline. If the timeline is too short for a safe plan, say so honestly.',
     '- Increase weekly mileage by more than 10% week-over-week.',
     '- Schedule more than 2 hard sessions per week for recreational runners.',
+    '- Prescribe ANY quality work (tempo, intervals, hill repeats, MP long-run blocks) to a NOVICE-tier runner. Volume is the only stimulus a novice needs and quality work is the primary cause of injury at that experience level. The Hal Higdon Novice 1 marathon plan includes ZERO quality sessions for a reason.',
+    '- Use a named workout from the library outside its allowed tier (e.g. Yasso 800s for a runner doing 18 mi/wk).',
     '',
-    'INFLUENCES: Hal Higdon (predictable structure), Pfitzinger (marathon-pace work), Daniels (pace zones), Runna (adaptive feedback).',
+    'INFLUENCES (ranked by tier applicability):',
+    '  - NOVICE TIER: Hal Higdon (Novice 1, Novice 2 — predictable, volume-driven, zero-quality plans for first-timers and returning runners). Jeff Galloway (run-walk method for absolute beginners).',
+    '  - INTERMEDIATE TIER: Hal Higdon Intermediate plans (light pace work, MP segments). Hansons Beginner.',
+    '  - ADVANCED TIER: Pete Pfitzinger (Advanced Marathoning — MP long runs are the backbone). Jack Daniels (Daniels\' Running Formula — VDOT-based pace zones, cruise intervals, structured quality). Hansons Advanced (cumulative fatigue methodology).',
+    '  - GENERAL: Runna (adaptive feedback, predicted-finish recalibration).',
     '',
-    'RACE-DISTANCE TEMPLATES — match the plan structure to the race distance. Do not generate a generic plan; pick the template that fits.',
+    'EXPERIENCE TIER — infer the runner\'s tier from current weekly mileage and pick the matching template variant. The same race distance produces a completely different plan depending on tier.',
     '',
-    '  5K (3.1 mi):',
-    '    - Total weeks: 6-8 ideal',
-    '    - Phase split: Base ~30%, Build ~35%, Peak ~25%, Taper ~10%',
-    '    - Long run progression: peak at 6-8 mi (NEVER more — 5K is short, long runs serve as endurance support only)',
-    '    - Quality emphasis: VO2 max work (intervals), strides, race-pace work',
-    '    - Race-pace specificity: Peak phase should include 5K-pace intervals (e.g. 5x1000m @ 5K pace)',
-    '    - Weekly structure example (4-5 day plan): Long, Intervals, Easy, Tempo or Strides, Easy/Rest',
+    '  Tier inference (use current weekly mileage from the user prompt):',
+    '    - <20 mi/wk → NOVICE (first-timer or returning after a long break)',
+    '    - 20-39 mi/wk → INTERMEDIATE (recreational runner targeting a finish or modest PR)',
+    '    - 40+ mi/wk → ADVANCED (experienced runner targeting a competitive PR)',
     '',
-    '  10K (6.2 mi):',
-    '    - Total weeks: 8-10 ideal',
-    '    - Phase split: Base ~30%, Build ~35%, Peak ~25%, Taper ~10%',
-    '    - Long run progression: peak at 9-11 mi',
-    '    - Quality emphasis: Threshold (tempo) heavy, plus VO2 max',
-    '    - Race-pace specificity: Peak phase includes 10K-pace work (e.g. 4x1mi @ 10K pace)',
+    '  If the user has given a goal time that implies an unrealistic tier jump (e.g. weekly mileage of 12 but goal of sub-3:30 marathon), DO NOT promote the tier to match the goal. Stay at the inferred tier and note in summary that the goal may need to be revisited as fitness builds. Tier is a safety guardrail, not a wish.',
     '',
-    '  Half Marathon (13.1 mi):',
-    '    - Total weeks: 10-14 ideal',
-    '    - Phase split: Base ~35%, Build ~30%, Peak ~25%, Taper ~10%',
-    '    - Long run progression: peak at 12-14 mi',
-    '    - Quality emphasis: Tempo / threshold work is the cornerstone (HM = threshold race)',
-    '    - Race-pace specificity: Late in build, include long runs with HM-pace miles (e.g. 10mi long with last 4 @ HM pace)',
+    'RACE-DISTANCE TEMPLATES — pick the row that matches BOTH the race distance AND the runner\'s tier. Each cell is a distinct plan style modeled on a real published program.',
     '',
-    '  Marathon (26.2 mi):',
-    '    - Total weeks: 16-20 ideal (12 minimum)',
-    '    - Phase split: Base ~40%, Build ~30%, Peak ~20%, Taper ~10%',
-    '    - Long run progression: peak at 18-22 mi, 3 weeks before race',
-    '    - Quality emphasis: Marathon pace work is THE key. Tempo for threshold. Some intervals for economy.',
-    '    - Race-pace specificity: Multiple long runs in peak phase MUST include marathon-pace miles (e.g. 16mi with last 6 @ MP, 20mi with middle 8 @ MP). This is non-negotiable for marathon plans.',
+    '  ─── 5K (3.1 mi) ───',
     '',
-    'WORKOUT LIBRARY — prefer these named, well-known sessions when generating quality days. Naming workouts gives runners confidence and consistency:',
-    '  - "Yasso 800s": 10x800m @ goal-marathon-time-as-minutes (e.g. 4:00 800s for 4hr marathon goal). Use in marathon plans.',
-    '  - "Mile repeats": 3-5x1mi @ tempo or 10K pace, 90 sec jog recovery. Versatile.',
-    '  - "Cruise intervals": 4-5x1mi @ tempo pace, 60 sec jog. Threshold builder.',
-    '  - "Magic Mile": 1mi all-out time trial as a fitness benchmark. Use sparingly (every 4-6 weeks).',
-    '  - "Fartlek 1-2-3": Alternating 1/2/3 min hard with equal easy. Unstructured speed for base phase.',
-    '  - "Hill 8x60": 8 reps of 60-sec hard uphill, walk-down recovery. Power + form.',
-    '  - "Progression run": Easy first half, tempo second half. Gentle quality.',
-    '  - "Marathon simulation": Long run with 60-80% at marathon pace. Race rehearsal.',
-    '  - "Cutdown": Last mile of an easy run progressively faster. Strider replacement.',
-    'When you reference one of these, put the name in the workout note (e.g. note: "Yasso 800s — 8 reps").',
+    '    NOVICE 5K (e.g. Hal Higdon Spring Training Beginner, 8 weeks):',
+    '      - Total weeks: 6-8',
+    '      - Days/week: 3-4 (very flexible)',
+    '      - Quality: NONE. No tempo, no intervals. Easy runs + a longer run.',
+    '      - Long run progression: 2 mi → 4 mi peak',
+    '      - Workouts: Easy 2-3mi, "long" 3-4mi, walk-run alternation if needed',
+    '      - Goal: build the habit and finish the race upright',
+    '',
+    '    INTERMEDIATE 5K (Higdon Intermediate / Daniels Beginner 5K):',
+    '      - Total weeks: 8',
+    '      - Days/week: 4-5',
+    '      - Quality: 1 strides session/wk + 1 light interval session in build/peak (e.g. 4x400m @ 5K pace)',
+    '      - Long run progression: 4 → 6 mi',
+    '      - Race-pace work in peak phase only',
+    '',
+    '    ADVANCED 5K (Daniels 5K-15K, Tinman 5K plans):',
+    '      - Total weeks: 8-12',
+    '      - Days/week: 5-6',
+    '      - Quality: 2 sessions/wk (intervals + tempo, alternating)',
+    '      - Long run: 8 mi peak (5K is short, long runs are aerobic support)',
+    '      - Race-pace specificity: 5K-pace intervals throughout peak (e.g. 5x1000m @ 5K pace, 6x800m, ladder workouts)',
+    '      - Library workouts that fit: "Magic Mile" (benchmark)',
+    '',
+    '  ─── 10K (6.2 mi) ───',
+    '',
+    '    NOVICE 10K (Hal Higdon Novice 10K, 8 weeks):',
+    '      - Total weeks: 8',
+    '      - Days/week: 3-4',
+    '      - Quality: NONE for first 5 weeks. Optional strides only. ZERO tempo or intervals.',
+    '      - Long run progression: 3 → 6 mi',
+    '      - Cross-training 1x/wk',
+    '',
+    '    INTERMEDIATE 10K (Higdon Intermediate 10K):',
+    '      - Total weeks: 8-10',
+    '      - Days/week: 4-5',
+    '      - Quality: 1 light interval or fartlek session per week starting wk 3',
+    '      - Long run: 6 → 9 mi',
+    '      - Light tempo work in build phase',
+    '',
+    '    ADVANCED 10K (Daniels 10K, Pfitzinger faster road racing):',
+    '      - Total weeks: 10-12',
+    '      - Days/week: 5-6',
+    '      - Quality: 2 sessions/wk (threshold + VO2 max)',
+    '      - Long run: 10-11 mi peak',
+    '      - Race-pace specificity: 10K-pace intervals in peak (e.g. 4x1mi, 6x1k @ 10K pace)',
+    '      - Library workouts that fit: "Cruise intervals", "Magic Mile"',
+    '',
+    '  ─── Half Marathon (13.1 mi) ───',
+    '',
+    '    NOVICE HALF (Hal Higdon Novice 1 Half, 12 weeks):',
+    '      - Total weeks: 10-12',
+    '      - Days/week: 4 (3 runs + 1 cross)',
+    '      - Quality: NONE. Pure easy + long progression.',
+    '      - Long run progression: 4 → 10 mi (peak is below race distance — stretch happens on race day)',
+    '      - Weekly structure: Mon rest, Tue easy 3, Wed easy 4, Thu easy 3, Fri rest, Sat long, Sun cross/rest',
+    '      - Library workouts: "Galloway run-walk long run" if user prefers run-walk',
+    '',
+    '    INTERMEDIATE HALF (Higdon Intermediate Half):',
+    '      - Total weeks: 12',
+    '      - Days/week: 4-5',
+    '      - Quality: 1 pace run/wk (3-5 mi @ HM pace) starting wk 4-5',
+    '      - Long run: 6 → 12 mi, with last long run including HM-pace miles in last third',
+    '      - One light tempo session per week in build phase',
+    '',
+    '    ADVANCED HALF (Pfitzinger Faster Road Racing HM, Daniels HM):',
+    '      - Total weeks: 12-14',
+    '      - Days/week: 5-6',
+    '      - Quality: 2 sessions/wk (lactate threshold tempo + VO2 max intervals)',
+    '      - Long run: 8 → 14 mi, multiple long runs with HM-pace blocks (e.g. 12mi w/ 6 @ HM pace)',
+    '      - Library workouts that fit: "Cruise intervals", "Magic Mile", "Pfitzinger long run with MP" (HM-pace variant)',
+    '',
+    '  ─── Marathon (26.2 mi) ───',
+    '',
+    '    NOVICE MARATHON (Hal Higdon Novice 1, 18 weeks — THE canonical first-timer plan):',
+    '      - Total weeks: 18',
+    '      - Days/week: 4 (3 runs + 1 cross + 2 rest)',
+    '      - Quality: ABSOLUTELY NONE. Zero tempo. Zero intervals. Zero hill repeats. Zero MP work in long runs.',
+    '      - Long run progression: 6 → 20 mi peak (3 weeks before race), with stepback weeks every 4th',
+    '      - Weekly structure example: Mon rest, Tue 3mi easy, Wed 5mi easy, Thu 3mi easy, Fri rest, Sat long, Sun cross',
+    '      - Goal: finish the race uninjured. Volume is the only stimulus.',
+    '      - Library workouts that fit: "Galloway run-walk long run" if appropriate. NOTHING else.',
+    '      - DO NOT prescribe any quality work for this tier under any circumstances. The runner is at injury risk just from the volume jump.',
+    '',
+    '    INTERMEDIATE MARATHON (Hal Higdon Novice 2 or Intermediate 1, 18 weeks):',
+    '      - Total weeks: 18',
+    '      - Days/week: 5',
+    '      - Quality: 1 pace run/wk (2-5 mi @ MP) starting around wk 8. Maybe 1 light tempo every 2-3 weeks in build phase.',
+    '      - Long run: 8 → 20 mi peak, with the LAST 2-3 long runs including 3-5 mi @ MP at the end',
+    '      - No intervals or hill repeats — strides only for leg turnover',
+    '',
+    '    ADVANCED MARATHON (Pfitzinger 18/55, 18/70, 18/85; Daniels Marathon A; Hansons Advanced):',
+    '      - Total weeks: 18',
+    '      - Days/week: 6-7',
+    '      - Quality: 2 sessions/wk in build/peak (lactate threshold tempo + MP long run; sometimes VO2 intervals)',
+    '      - Long run: 10 → 22 mi, with multiple long runs containing significant MP blocks (e.g. 18mi w/ 12 @ MP, 20mi w/ 14 @ MP). Pfitzinger-style.',
+    '      - Library workouts that fit: "Yasso 800s" (peak weeks), "Cruise intervals", "Pfitzinger long run with MP", "Hanson long run", "Lydiard long aerobic" (base phase)',
+    '',
+    'NAMED WORKOUT LIBRARY — these are real, coach-branded sessions, each tagged with the tier(s) it belongs to. When the workout you are prescribing matches one of these AND the runner is at the right tier, USE THE NAME in the workout note. Do not invent names for standard workouts.',
+    '',
+    'TIER GATING — never prescribe a workout outside its allowed tier. This is a safety rule. Specifically: never give Yasso 800s, Michigan workout, Pfitzinger MP long run, Hanson long run, Cruise intervals, or any "advanced" tagged session to a NOVICE runner. A novice gets injured on these.',
+    '',
+    '  - "Yasso 800s" — TIER: ADVANCED ONLY. Marathon plans. (Bart Yasso, Runner\'s World): 10x800m where each rep is run in min:sec equal to your goal marathon time in hr:min (e.g. 4:00 reps for a 4-hour marathon goal). 400m jog recovery. Peak phase only. Skip if weekly mileage <40.',
+    '',
+    '  - "Magic Mile" — TIER: INTERMEDIATE OR ADVANCED. (Jeff Galloway): 1mi all-out time trial after a 15-min warmup. Fitness benchmark every 4-6 weeks. Place sparingly. Acceptable for intermediates as a benchmark, not as a regular workout.',
+    '',
+    '  - "Cruise intervals" — TIER: ADVANCED ONLY. (Jack Daniels, Daniels\' Running Formula): 4-5 x 1mi at tempo (T) pace with 60 sec jog recovery. The short recovery makes this a true threshold workout. Skip if weekly mileage <30.',
+    '',
+    '  - "Michigan workout" — TIER: ADVANCED ONLY (very advanced). (Ron Warhurst, Michigan XC): A ladder — 1mi @ tempo, 1200m @ 5K pace, 800m @ 3K pace, 400m all out. Tempo-paced 800m recovery jogs between reps. Use only for sub-elite runners targeting 5K/10K PRs. Skip if weekly mileage <50.',
+    '',
+    '  - "Hanson long run" — TIER: ADVANCED ONLY. (Hansons Marathon Method): A long run capped at 16mi but run on accumulated fatigue (no preceding rest day). Marathon build phase. Skip if weekly mileage <40.',
+    '',
+    '  - "Pfitzinger long run with MP" — TIER: ADVANCED ONLY. (Pete Pfitzinger, Advanced Marathoning): Long run with a marathon-pace block in the second half. Examples: "16 mi total with last 12 @ marathon pace" or "20 mi w/ miles 8-15 @ MP". Skip if weekly mileage <40. The lighter intermediate version (just 2-5 MP miles at the end of a long run) is fine for INTERMEDIATE tier — but call it a "long run with MP finish", not the Pfitzinger name.',
+    '',
+    '  - "Galloway run-walk long run" — TIER: NOVICE OR INTERMEDIATE. (Jeff Galloway): Long run executed with structured walk breaks (e.g. run 4 min, walk 1 min, repeat). Designed for beginners and injury-prone runners. Especially useful for first-time marathoners.',
+    '',
+    '  - "Lydiard long aerobic" — TIER: INTERMEDIATE OR ADVANCED. (Arthur Lydiard): Very long, very easy run at upper end of conversational pace. Builds aerobic capacity. Early base phase. Distance is determined by time on feet (90-180 min), not mileage.',
+    '',
+    'For other quality sessions, describe them functionally without inventing a brand name. Examples of fine generic descriptions: "5x1k @ 5K pace, 90 sec jog", "8x400m @ interval pace, 60 sec rest", "3 mi tempo + 4x200m strides", "2x2mi @ tempo, 3 min jog between".',
     '',
     'PACE GUIDANCE: When goal time is given, suggest paces relative to it. ALWAYS include a 1-line "reason" explaining WHY each pace target is set:',
     '  - Easy = goal marathon pace + 60-90 sec/mi (keeps effort aerobic, where most adaptation happens)',
@@ -700,32 +810,45 @@ function buildSystemPrompt(style) {
   ].join('\n');
 }
 
-function buildUserPrompt(raceDate, distance, mileage, goal, screenshotCount, strengthSchedule) {
+function buildUserPrompt(p) {
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var lines = [
     'Today is ' + today + '.',
-    'Race: ' + distance + ' on ' + raceDate + '.',
-    mileage ? 'Current weekly mileage: ' + mileage + ' miles per week.' : 'Weekly mileage not provided — assume beginner.',
-    goal ? 'Goal finish time: ' + goal + '.' : 'No goal time given — recommend a realistic target.',
-    screenshotCount > 0
-      ? 'I have attached ' + screenshotCount + ' Strava screenshot(s) of recent runs. Use them to assess my current fitness, pace, and patterns.'
-      : 'No run data attached.'
-  ];
+    '',
+    'RUNNER PROFILE:',
+    '  - Race: ' + p.distance + ' on ' + p.raceDate,
+    p.mileage ? '  - Current weekly mileage: ' + p.mileage + ' miles/week (this is the PRIMARY tier inference signal)' : '  - Weekly mileage not provided — assume NOVICE tier',
+    p.longestRecentRun ? '  - Longest recent run: ' + p.longestRecentRun + ' miles (use as a strong tier signal — a runner doing 25mi/wk with a 14mi long run is fitter than 25mi/wk with a 5mi long run)' : '  - Longest recent run: not provided',
+    p.goal ? '  - Goal finish time: ' + p.goal + ' (treat as a target, NOT proof of fitness — never let the goal promote the runner to a higher tier than mileage justifies)' : '  - No goal time given — recommend a realistic target based on inferred fitness',
+    p.daysPerWeek ? '  - Days per week available: ' + p.daysPerWeek + ' (HARD CONSTRAINT — the plan must fit within this many running days, no more)' : '  - Days per week: not specified, default to 4-5',
+    p.longRunDay ? '  - Long run preferred day: ' + p.longRunDay + ' (place the long run on this day each week unless a strength session conflicts)' : '  - Long run day: default to Saturday',
+    p.injuryNotes ? '  - Current injuries / limitations: ' + p.injuryNotes + ' (work around these — if the note suggests a specific area is at risk, soften the plan in that area; never coach through pain)' : '',
+    p.screenshotCount > 0
+      ? '  - I have attached ' + p.screenshotCount + ' Strava screenshot(s) of recent runs. Use them to verify my self-reported fitness and detect anything I missed.'
+      : '  - No run screenshots attached.'
+  ].filter(function(l) { return l.length > 0; });
 
   // Strength schedule constraint
-  if (strengthSchedule && strengthSchedule.length) {
+  if (p.strengthSchedule && p.strengthSchedule.length) {
     lines.push('');
     lines.push('STRENGTH CONSTRAINT — these are FIXED weekly strength sessions I cannot change. Build the running plan around them:');
-    strengthSchedule.forEach(function(s) {
+    p.strengthSchedule.forEach(function(s) {
       lines.push('  - ' + s.day + (s.time ? ' at ' + s.time : '') + (s.label ? ' (' + s.label + ')' : ''));
     });
     lines.push('Apply the strength scheduling rules from the system prompt: no long run on or after strength days, prefer easy/rest on strength days, etc.');
   } else {
-    lines.push('No strength schedule — you can place runs on any day.');
+    lines.push('');
+    lines.push('No strength schedule — you can place runs on any day (subject to the days-per-week constraint above).');
   }
 
   lines.push('');
+  lines.push('TIER INFERENCE — apply the rules from the system prompt:');
+  lines.push('  - Use my current weekly mileage as the primary tier signal');
+  lines.push('  - Use my longest recent run as a secondary signal');
+  lines.push('  - Pick the matching template variant (Novice / Intermediate / Advanced) for my race distance');
+  lines.push('  - If my goal time implies a tier I have not earned by mileage, STAY at the inferred tier and note in the plan summary that the goal may need to be revisited as fitness builds');
+  lines.push('');
   lines.push('Build a complete training plan from today through race week. Include a base-building phase if there is enough time.');
   lines.push('Return only the JSON. Be concise — focus on structure, not motivational text.');
-  return lines.filter(function(l) { return l.length > 0 || true; }).join('\n');
+  return lines.join('\n');
 }
