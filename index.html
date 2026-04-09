@@ -341,6 +341,33 @@
     border: 1px solid var(--accent-border);
   }
   .workout-hero-session-cta:hover { opacity: 0.92; }
+  /* Hero card workout segments (PG-1) */
+  .hero-segments {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hero-seg {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .hero-seg-icon { color: var(--accent); font-size: 10px; width: 12px; flex-shrink: 0; }
+  .hero-seg-part {
+    text-transform: uppercase;
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--ink-light);
+    letter-spacing: 0.6px;
+    width: 56px;
+    flex-shrink: 0;
+  }
+  .hero-seg-detail { color: var(--ink-mid); flex: 1; }
 
   /* This week strip */
   .week-strip-card {
@@ -1279,6 +1306,41 @@
     letter-spacing: 0.6px;
     margin-left: 6px;
     vertical-align: middle;
+  }
+  /* Workout segments (PG-1: warmup/main/recovery/cooldown) */
+  .pwr-segments {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pwr-seg {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .pwr-seg-icon {
+    color: var(--accent);
+    font-size: 10px;
+    width: 12px;
+    flex-shrink: 0;
+  }
+  .pwr-seg-part {
+    text-transform: uppercase;
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--ink-light);
+    letter-spacing: 0.6px;
+    width: 56px;
+    flex-shrink: 0;
+  }
+  .pwr-seg-detail {
+    color: var(--ink-mid);
+    flex: 1;
   }
   .chart-legend {
     display: flex;
@@ -5342,7 +5404,26 @@ function renderHome() {
         runHeadline = escape(today.type) + (today.miles ? ` · ${today.miles} mi` : '');
         const metaParts = [];
         if (pace) metaParts.push(`Target pace ${escape(pace)}`);
+        // Duration: prefer plan's estimatedDurationMin, fall back to derived
+        let durMin = today.estimatedDurationMin;
+        if (!durMin && pace && today.miles) {
+          const paceMid = parsePaceMinutes(pace);
+          if (paceMid) durMin = Math.round(paceMid * today.miles);
+        }
+        if (durMin) metaParts.push(`~${durMin} min`);
         runMeta = metaParts.join(' · ');
+      }
+
+      // Segments breakdown for hero (PG-1) — show structured workout below meta
+      let runSegmentsHTML = '';
+      if (!isRest && Array.isArray(today.segments) && today.segments.length > 0) {
+        const segIcons = { warmup: '▶', main: '⚡', recovery: '↻', cooldown: '◀' };
+        runSegmentsHTML = '<div class="hero-segments">' + today.segments.map(seg => {
+          const segIcon = segIcons[seg.part] || '•';
+          const milesLabel = seg.miles ? `${seg.miles}mi` : '';
+          const noteLabel = seg.note ? ` · ${escape(seg.note)}` : '';
+          return `<div class="hero-seg"><span class="hero-seg-icon">${segIcon}</span><span class="hero-seg-part">${escape(seg.part || '')}</span><span class="hero-seg-detail">${milesLabel} ${escape(seg.paceTarget || '')}${noteLabel}</span></div>`;
+        }).join('') + '</div>';
       }
 
       let runCtaLabel, runCtaClass, runCtaAction;
@@ -5363,6 +5444,7 @@ function renderHome() {
             <div class="workout-hero-session-label">${isRest ? 'Today' : 'Run'}</div>
             <div class="workout-hero-session-headline">${runHeadline}</div>
             ${runMeta ? `<div class="workout-hero-session-meta">${runMeta}</div>` : ''}
+            ${runSegmentsHTML}
           </div>
           <button class="${runCtaClass}" ${runCtaAction}>${runCtaLabel}</button>
         </div>`;
@@ -5660,14 +5742,13 @@ function renderPlan() {
     if (!isRest) {
       const pace = getPaceForWorkout(d.type);
       if (pace) metaParts.push(`${escape(pace)}`);
-      // Estimated minutes if we have pace
-      if (pace && d.miles) {
+      // Duration: prefer plan's estimatedDurationMin, fall back to derived
+      let durationMin = d.estimatedDurationMin;
+      if (!durationMin && pace && d.miles) {
         const paceMid = parsePaceMinutes(pace);
-        if (paceMid) {
-          const totalMin = Math.round(paceMid * d.miles);
-          metaParts.push(`~${totalMin} min`);
-        }
+        if (paceMid) durationMin = Math.round(paceMid * d.miles);
       }
+      if (durationMin) metaParts.push(`~${durationMin} min`);
       if (d.note) metaParts.push(escape(d.note));
     } else {
       metaParts.push('Recovery & adaptation');
@@ -5677,6 +5758,19 @@ function renderPlan() {
       metaParts.push(`<span class="pwr-strength">💪 ${strLine}</span>`);
     }
     const metaHTML = metaParts.length ? `<div class="pwr-meta">${metaParts.join(' · ')}</div>` : '';
+
+    // Segments (PG-1) — show structured workout breakdown when present
+    let segmentsHTML = '';
+    if (Array.isArray(d.segments) && d.segments.length > 0) {
+      const segIcons = { warmup: '▶', main: '⚡', recovery: '↻', cooldown: '◀' };
+      segmentsHTML = '<div class="pwr-segments">' + d.segments.map(seg => {
+        const icon = segIcons[seg.part] || '•';
+        const milesLabel = seg.miles ? `${seg.miles}mi` : '';
+        const paceLabel = seg.paceTarget || '';
+        const noteLabel = seg.note ? ` · ${escape(seg.note)}` : '';
+        return `<div class="pwr-seg"><span class="pwr-seg-icon">${icon}</span><span class="pwr-seg-part">${escape(seg.part || '')}</span><span class="pwr-seg-detail">${milesLabel} ${escape(paceLabel)}${noteLabel}</span></div>`;
+      }).join('') + '</div>';
+    }
 
     const onClick = isCurrentWeek && !isRest ? `onclick="openSwapModal(${i})"` : '';
 
@@ -5695,6 +5789,7 @@ function renderPlan() {
         <div class="pwr-body">
           <div class="pwr-headline">${headline}</div>
           ${metaHTML}
+          ${segmentsHTML}
         </div>
         ${statusBadge}
       </div>`;
