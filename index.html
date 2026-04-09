@@ -650,6 +650,31 @@
     font-size: 14px;
     flex-shrink: 0;
   }
+  .log-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .log-delete-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--ink-light);
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .log-delete-btn:hover {
+    color: #fca5a5;
+    border-color: rgba(239,68,68,0.3);
+  }
   .log-row-stats {
     font-size: 12px;
     color: var(--ink-mid);
@@ -1834,6 +1859,7 @@
           <button class="log-filter-btn" data-filter="strength" onclick="setLogFilter('strength')">Strength</button>
         </div>
       </div>
+      <button class="btn-primary" onclick="openManualForm()" style="margin-bottom:12px;font-size:13px;padding:10px;">+ Log a workout</button>
       <div id="log-stats-bar"></div>
       <div id="log-list"></div>
     </div>
@@ -1864,6 +1890,33 @@
     <div class="modal-sub" id="swap-modal-sub">Pick a day to swap with</div>
     <div class="swap-day-grid" id="swap-day-grid"></div>
     <button class="btn-ghost" onclick="cancelSwap()">Cancel</button>
+  </div>
+</div>
+
+<!-- Manual workout entry modal -->
+<div id="manual-modal" class="modal-backdrop" onclick="if(event.target===this)closeManualForm()">
+  <div class="modal-card" style="max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">Log a workout</div>
+    <div class="modal-sub">Add or edit any past or present workout</div>
+
+    <div class="row" style="margin-top:14px;">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="manual-date" />
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <select id="manual-type" onchange="onManualTypeChange(this.value)">
+          <option value="run">Run</option>
+          <option value="strength">Strength</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="manual-form-body"></div>
+
+    <button class="btn-primary" id="manual-save-btn" onclick="submitManualWorkout()" style="margin-top:14px;">Save</button>
+    <button class="btn-ghost" onclick="closeManualForm()">Cancel</button>
   </div>
 </div>
 
@@ -2560,6 +2613,240 @@ function submitWellness() {
 function cancelWellness() {
   wellnessForm = { open: false, sleep: null, soreness: null };
   renderHome();
+}
+
+// ════════════════════════════════════════════════════
+// MANUAL WORKOUT (add or edit any date)
+// ════════════════════════════════════════════════════
+let manualForm = {
+  editingDate: null,    // if editing existing, the original date
+  editingType: null,    // if editing existing, the original type
+  date: '',
+  type: 'run',
+  status: 'done',
+  rpe: null,
+  note: '',
+  distance: '',
+  duration: '',
+  avgHR: '',
+  actualType: 'Easy'
+};
+
+const RUN_TYPES = ['Easy', 'Long', 'Tempo', 'Intervals', 'Cross', 'Other'];
+
+function openManualForm(existingDate, existingType) {
+  if (existingDate && existingType && checkIns[existingDate] && checkIns[existingDate][existingType]) {
+    const d = checkIns[existingDate][existingType];
+    manualForm = {
+      editingDate: existingDate,
+      editingType: existingType,
+      date: existingDate,
+      type: existingType,
+      status: d.status || 'done',
+      rpe: d.rpe || null,
+      note: d.note || '',
+      distance: d.distance != null ? String(d.distance) : '',
+      duration: d.duration || '',
+      avgHR: d.avgHR != null ? String(d.avgHR) : '',
+      actualType: d.actualType || 'Easy'
+    };
+  } else {
+    manualForm = {
+      editingDate: null,
+      editingType: null,
+      date: todayISO(),
+      type: 'run',
+      status: 'done',
+      rpe: null,
+      note: '',
+      distance: '',
+      duration: '',
+      avgHR: '',
+      actualType: 'Easy'
+    };
+  }
+  document.getElementById('manual-date').value = manualForm.date;
+  document.getElementById('manual-type').value = manualForm.type;
+  renderManualFormBody();
+  document.getElementById('manual-modal').classList.add('open');
+}
+
+function closeManualForm() {
+  document.getElementById('manual-modal').classList.remove('open');
+}
+
+function onManualTypeChange(value) {
+  manualForm.type = value;
+  renderManualFormBody();
+}
+
+function updateManualField(field, value) {
+  manualForm[field] = value;
+}
+
+function selectManualStatus(s) {
+  manualForm.status = s;
+  renderManualFormBody();
+}
+
+function selectManualRPE(n) {
+  manualForm.rpe = n;
+  renderManualFormBody();
+}
+
+function selectManualActualType(t) {
+  manualForm.actualType = t;
+  renderManualFormBody();
+}
+
+async function uploadManualScreenshot(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    const base64 = await fileToBase64(file);
+    const res = await postJson({
+      action: 'parseRunScreenshot',
+      passcode: getPasscode(),
+      image: base64
+    });
+    if (res.error) throw new Error(res.error);
+    const d = res.data || {};
+    if (d.distance != null) manualForm.distance = String(d.distance);
+    if (d.duration)         manualForm.duration = d.duration;
+    if (d.avgHR != null)    manualForm.avgHR    = String(d.avgHR);
+    if (d.type)             manualForm.actualType = d.type;
+    renderManualFormBody();
+  } catch (e) {
+    alert('Could not parse screenshot: ' + e.message);
+  }
+}
+
+function renderManualFormBody() {
+  const el = document.getElementById('manual-form-body');
+  if (!el) return;
+
+  // Status pills
+  const statuses = ['done', 'skipped', 'modified'];
+  const statusBtns = statuses.map(s => {
+    const active = manualForm.status === s ? `active ${s}` : '';
+    return `<button class="status-btn ${active}" onclick="selectManualStatus('${s}')">${STATUS_LABELS[s]}</button>`;
+  }).join('');
+
+  // RPE
+  const rpeBtns = [];
+  for (let i = 1; i <= 10; i++) {
+    const active = manualForm.rpe === i ? 'active' : '';
+    rpeBtns.push(`<div class="rpe-dot ${active}" onclick="selectManualRPE(${i})">${i}</div>`);
+  }
+
+  // Run-specific fields
+  let runBlock = '';
+  if (manualForm.type === 'run') {
+    const typeOptions = RUN_TYPES.map(t =>
+      `<option value="${t}"${manualForm.actualType === t ? ' selected' : ''}>${t}</option>`
+    ).join('');
+    const livePace = calcPace(manualForm.distance, manualForm.duration);
+    runBlock = `
+      <div class="field" style="margin-top:14px;">
+        <label>Workout type</label>
+        <select onchange="selectManualActualType(this.value)">${typeOptions}</select>
+      </div>
+
+      <label class="screenshot-btn" for="manual-screenshot-input" style="margin-top:10px;">
+        📷 Auto-fill from screenshot
+        <input type="file" id="manual-screenshot-input" accept="image/*" onchange="uploadManualScreenshot(this)" />
+      </label>
+
+      <div class="run-fields" style="margin-top:10px;">
+        <div>
+          <label>Distance</label>
+          <input type="number" step="0.01" placeholder="4.5" value="${escape(manualForm.distance || '')}" oninput="updateManualField('distance', this.value)" />
+          <div class="hint">miles</div>
+        </div>
+        <div>
+          <label>Duration</label>
+          <input type="text" placeholder="42:30" value="${escape(manualForm.duration || '')}" oninput="updateManualField('duration', this.value)" />
+          <div class="hint">m:ss or h:mm:ss</div>
+        </div>
+        <div>
+          <label>Avg HR</label>
+          <input type="number" placeholder="155" value="${escape(manualForm.avgHR || '')}" oninput="updateManualField('avgHR', this.value)" />
+          <div class="hint">bpm</div>
+        </div>
+      </div>
+      ${livePace ? `<div class="live-pace">Pace: <span>${livePace}</span></div>` : ''}
+    `;
+  }
+
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--ink-light);margin-top:14px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Status</div>
+    <div class="checkin-actions">${statusBtns}</div>
+    <div style="font-size:11px;color:var(--ink-light);margin-top:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">RPE — how hard?</div>
+    <div class="rpe-row">${rpeBtns.join('')}</div>
+    ${runBlock}
+    <input type="text" class="checkin-note-input" placeholder="Optional note" value="${escape(manualForm.note || '')}" oninput="updateManualField('note', this.value)" />
+  `;
+}
+
+function submitManualWorkout() {
+  const date = document.getElementById('manual-date').value;
+  const type = document.getElementById('manual-type').value;
+  if (!date) { alert('Please pick a date'); return; }
+
+  const data = {
+    status: manualForm.status,
+    rpe: manualForm.rpe,
+    note: manualForm.note,
+    loggedAt: new Date().toISOString()
+  };
+  if (type === 'run') {
+    if (manualForm.distance) data.distance = parseFloat(manualForm.distance) || null;
+    if (manualForm.duration) data.duration = manualForm.duration;
+    if (manualForm.avgHR)    data.avgHR    = parseInt(manualForm.avgHR) || null;
+    if (manualForm.actualType) data.actualType = manualForm.actualType;
+  }
+
+  // If editing and date/type changed, remove the old entry
+  if (manualForm.editingDate && manualForm.editingType &&
+      (manualForm.editingDate !== date || manualForm.editingType !== type)) {
+    if (checkIns[manualForm.editingDate]) {
+      delete checkIns[manualForm.editingDate][manualForm.editingType];
+      if (Object.keys(checkIns[manualForm.editingDate]).length === 0) {
+        delete checkIns[manualForm.editingDate];
+      }
+    }
+  }
+
+  if (!checkIns[date]) checkIns[date] = {};
+  checkIns[date][type] = data;
+
+  // Persist
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : {};
+    payload.checkIns = checkIns;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+
+  closeManualForm();
+  renderDashboard();
+}
+
+function deleteLogEntry(date, type) {
+  if (!confirm(`Delete this ${type} entry from ${date}?`)) return;
+  if (!checkIns[date] || !checkIns[date][type]) return;
+  delete checkIns[date][type];
+  if (Object.keys(checkIns[date]).length === 0) delete checkIns[date];
+  // Persist
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : {};
+    payload.checkIns = checkIns;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+  renderDashboard();
 }
 
 // ════════════════════════════════════════════════════
@@ -3753,11 +4040,14 @@ function renderLogRow(entry) {
   return `
     <div class="log-row ${status}">
       <div class="log-row-head">
-        <div>
+        <div style="flex:1;cursor:pointer;" onclick="openManualForm('${entry.date}', '${entry.type}')">
           <div class="log-row-date">${dateLabel}</div>
           <div class="log-row-type">${icon} ${escape(typeText)}</div>
         </div>
-        <div class="log-row-status">${statusIcon}</div>
+        <div class="log-row-actions">
+          <div class="log-row-status">${statusIcon}</div>
+          <button class="log-delete-btn" onclick="deleteLogEntry('${entry.date}', '${entry.type}')" title="Delete">×</button>
+        </div>
       </div>
       ${statsLine}
       ${metaLine}
