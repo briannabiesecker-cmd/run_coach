@@ -2800,6 +2800,49 @@ function gatherWeekData(weekIdx) {
     };
   }
 
+  // Prior reviews — pass last 2 review summaries + observations as context
+  // so the AI can spot multi-week patterns
+  const recentReviews = [];
+  for (let i = weekIdx - 1; i >= Math.max(0, weekIdx - 2); i--) {
+    const r = weeklyReviews[String(i)];
+    if (r) {
+      recentReviews.push({
+        weekNumber: r.weekNumber || (i + 1),
+        compliancePct: r.compliancePct,
+        summary: r.summary,
+        observations: (r.observations || []).map(o => o.text || ''),
+        recommendation: r.recommendation
+      });
+    }
+  }
+
+  // Cumulative stats across the plan so far
+  let cumPlanned = 0, cumDone = 0, cumDoneRuns = 0, cumSkipped = 0;
+  for (let i = 0; i <= weekIdx; i++) {
+    const w = plan.weeks[i];
+    if (!w || !w.days) continue;
+    cumPlanned += w.totalMiles || 0;
+    w.days.forEach((d, di) => {
+      if (d.type === 'Rest' || !d.miles) return;
+      const date = new Date(planStartDate + 'T00:00:00');
+      date.setDate(date.getDate() + i * 7 + di);
+      const iso = date.toISOString().slice(0, 10);
+      const ci = checkIns[iso] && checkIns[iso].run;
+      if (ci) {
+        if (ci.status === 'done')    { cumDone += (ci.distance || d.miles); cumDoneRuns++; }
+        if (ci.status === 'skipped') cumSkipped++;
+      }
+    });
+  }
+  const cumStats = {
+    weeksCompleted: weekIdx + 1,
+    totalPlannedMiles: Math.round(cumPlanned),
+    totalActualMiles: Math.round(cumDone),
+    overallCompliancePct: cumPlanned > 0 ? Math.round((cumDone / cumPlanned) * 100) : 0,
+    runsCompleted: cumDoneRuns,
+    runsSkipped: cumSkipped
+  };
+
   return {
     weekData: {
       week: week.week,
@@ -2810,7 +2853,9 @@ function gatherWeekData(weekIdx) {
     dayLogs: dayLogs,
     wellnessAvg: wellnessAvg,
     raceInfo: raceInfo,
-    nextWeek: nextWeekPayload
+    nextWeek: nextWeekPayload,
+    recentReviews: recentReviews,
+    cumulativeStats: cumStats
   };
 }
 

@@ -327,7 +327,9 @@ function weeklyReview(params) {
   var dayLogs     = params.dayLogs     || [];   // [{ day, plannedType, plannedMiles, status, rpe, note }]
   var wellnessAvg = params.wellnessAvg || null; // { sleep, soreness, daysLogged }
   var raceInfo    = params.raceInfo    || {};   // { name, date, distance, goalTime, weeksOut }
-  var nextWeek    = params.nextWeek    || null; // { week, phase, focus, totalMiles, days } — current plan for next week
+  var nextWeek    = params.nextWeek    || null; // { week, phase, focus, totalMiles, days }
+  var recentReviews   = params.recentReviews   || []; // last 2 prior reviews
+  var cumulativeStats = params.cumulativeStats || null; // overall plan stats so far
   var coachingStyle = params.coachingStyle || 'encouraging';
 
   var systemPrompt = [
@@ -411,6 +413,30 @@ function weeklyReview(params) {
     lines.push('');
   } else {
     lines.push('WELLNESS: not logged this week');
+    lines.push('');
+  }
+
+  // Cumulative stats so far
+  if (cumulativeStats) {
+    lines.push('CUMULATIVE STATS (plan so far):');
+    lines.push('- Weeks completed: ' + cumulativeStats.weeksCompleted);
+    lines.push('- Total miles: ' + cumulativeStats.totalActualMiles + ' of ' + cumulativeStats.totalPlannedMiles + ' planned (' + cumulativeStats.overallCompliancePct + '%)');
+    lines.push('- Runs completed: ' + cumulativeStats.runsCompleted + ' · Runs skipped: ' + cumulativeStats.runsSkipped);
+    lines.push('');
+  }
+
+  // Prior reviews — coach memory
+  if (recentReviews.length) {
+    lines.push('PRIOR COACH OBSERVATIONS (last ' + recentReviews.length + ' week' + (recentReviews.length > 1 ? 's' : '') + '):');
+    recentReviews.forEach(function(r) {
+      lines.push('- Week ' + r.weekNumber + ' (' + (r.compliancePct || 0) + '% compliance): ' + (r.summary || ''));
+      if (r.observations && r.observations.length) {
+        r.observations.forEach(function(o) { lines.push('    · ' + o); });
+      }
+      if (r.recommendation) lines.push('    → Recommended: ' + r.recommendation);
+    });
+    lines.push('');
+    lines.push('IMPORTANT: Look for patterns across weeks. If you see a repeated issue (e.g. "tempo always skipped 3 weeks in a row"), call it out and propose a structural fix.');
     lines.push('');
   }
 
