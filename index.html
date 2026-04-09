@@ -3720,8 +3720,8 @@ async function pullFromCloud() {
 
 async function pushToCloud() {
   const name = getUserName();
-  if (!name) return;
-  if (cloudSyncing) return; // simple in-flight guard
+  if (!name) return { skipped: 'no userName set' };
+  if (cloudSyncing) return { skipped: 'already in flight' };
   cloudSyncing = true;
   try {
     // Build the payload from current in-memory state — same shape we
@@ -3742,9 +3742,14 @@ async function pushToCloud() {
       userName: name,
       payload: payload
     });
-    if (res.error) console.warn('Cloud push failed:', res.error);
+    if (res.error) {
+      console.warn('Cloud push failed:', res.error);
+      return { error: res.error };
+    }
+    return { ok: true, updatedAt: res.updatedAt };
   } catch (e) {
     console.warn('Cloud push error:', e.message);
+    return { error: 'fetch failed: ' + e.message };
   } finally {
     cloudSyncing = false;
   }
