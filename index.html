@@ -2943,7 +2943,7 @@
       <div id="workout-hero"></div>
 
       <!-- Inline check-in form slot (expands when user taps Log run / Mark done) -->
-      <div id="strength-today-section"></div>
+      <div id="checkin-form-section"></div>
 
       <!-- This week strip -->
       <div id="week-strip-section"></div>
@@ -5021,154 +5021,6 @@ function parsePaceMinutes(paceStr) {
   return (toMin(matches[0]) + toMin(matches[1])) / 2;
 }
 
-function renderIntentionCard() {
-  if (!plan || !plan.weeks) return '';
-  const wkIdx = getCurrentWeekIndex();
-  const week = plan.weeks[wkIdx];
-  if (!week || !week.days) return '';
-  const dayIdx = getCurrentDayIndex();
-  const today = week.days[dayIdx];
-  if (!today) return '';
-
-  const lib = INTENTION_LIB[today.type];
-  if (!lib) return '';
-
-  const icon = TYPE_ICONS[today.type] || '🏃';
-  const milesText = today.miles ? ` · ${today.miles} mi` : '';
-  const pace = getPaceForWorkout(today.type);
-
-  return `
-    <div class="intention-card">
-      <div class="intention-tag">Today's Intention</div>
-      <div class="intention-title">${icon} ${escape(today.type)}${milesText}</div>
-      ${pace ? `<div class="intention-pace">Target pace: ${escape(pace)}</div>` : ''}
-      <div class="intention-section">
-        <div class="label">The point</div>
-        <div class="body">${escape(lib.purpose)}</div>
-      </div>
-      <div class="intention-section">
-        <div class="label">How it feels</div>
-        <div class="body">${escape(lib.feel)}</div>
-      </div>
-      <div class="intention-section">
-        <div class="label">Coach's tip</div>
-        <div class="body">${escape(lib.tip)}</div>
-      </div>
-    </div>`;
-}
-
-// ─── WEEK AHEAD CARD ───
-function findWorkoutInWeek(week, types) {
-  if (!week || !week.days) return null;
-  for (let i = 0; i < week.days.length; i++) {
-    if (types.indexOf(week.days[i].type) !== -1) {
-      return { dayIdx: i, day: week.days[i] };
-    }
-  }
-  return null;
-}
-
-function getWeekProgress(weekIdx) {
-  // Iterate ALL 7 calendar days of the week so logged runs on rest days count too
-  if (!plan || !plan.weeks || !plan.weeks[weekIdx]) return { done: 0, planned: 0 };
-  const week = plan.weeks[weekIdx];
-  let planned = week.totalMiles || 0;
-  let done = 0;
-  if (planStartDate) {
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(planStartDate + 'T00:00:00');
-      date.setDate(date.getDate() + weekIdx * 7 + i);
-      const iso = date.toISOString().slice(0, 10);
-      const ci = getCheckIn(iso, 'run');
-      if (ci && ci.status === 'done') {
-        const plannedMi = (week.days && week.days[i]) ? (week.days[i].miles || 0) : 0;
-        done += ci.distance || plannedMi || 0;
-      }
-    }
-  }
-  return { done, planned };
-}
-
-function getCoachTip(week, dayIdx) {
-  if (!week || !week.days) return '';
-  const today = week.days[dayIdx];
-  const tomorrow = week.days[dayIdx + 1];
-  const yesterday = week.days[dayIdx - 1];
-
-  // Day before long run
-  if (tomorrow && tomorrow.type === 'Long') {
-    return '<strong>Long run tomorrow.</strong> Stay light today — easy effort, hydrate, eat carbs at dinner.';
-  }
-  // Long run today
-  if (today && today.type === 'Long') {
-    return '<strong>Long run day.</strong> Fuel before, refuel within 30 min after. Embrace the slow pace.';
-  }
-  // Day after long run
-  if (yesterday && yesterday.type === 'Long') {
-    return '<strong>Recovery day.</strong> Easy or rest. Your legs are doing the real work right now.';
-  }
-  // Quality day
-  if (today && (today.type === 'Tempo' || today.type === 'Intervals')) {
-    return '<strong>Quality day.</strong> Warm up 10 min, hit your target paces, cool down. The point is the effort, not the distance.';
-  }
-  // Day before quality
-  if (tomorrow && (tomorrow.type === 'Tempo' || tomorrow.type === 'Intervals')) {
-    return '<strong>Quality workout tomorrow.</strong> Get good sleep tonight. Today should feel easy.';
-  }
-  // Phase-specific generic tip
-  if (week.phase === 'Base') return '<strong>Base phase:</strong> Aerobic foundation. Run easy, accumulate time on feet, no heroics.';
-  if (week.phase === 'Build') return '<strong>Build phase:</strong> Intensity is being added. Honor the easy days so the hard days work.';
-  if (week.phase === 'Peak') return '<strong>Peak phase:</strong> Race-specific work. This is the hardest stretch — trust the plan.';
-  if (week.phase === 'Taper') return '<strong>Taper:</strong> Less is more. The fitness is banked. Sharpen, don\'t train.';
-  return 'Stay consistent. Small daily efforts compound over weeks.';
-}
-
-function renderWeekAheadCard() {
-  if (!plan || !plan.weeks) return '';
-  const wkIdx = getCurrentWeekIndex();
-  const week = plan.weeks[wkIdx];
-  if (!week) return '';
-  const dayIdx = getCurrentDayIndex();
-
-  const longRun = findWorkoutInWeek(week, ['Long']);
-  const quality = findWorkoutInWeek(week, ['Tempo', 'Intervals']);
-  const progress = getWeekProgress(wkIdx);
-  const pct = progress.planned > 0 ? Math.round((progress.done / progress.planned) * 100) : 0;
-  const tip = getCoachTip(week, dayIdx);
-
-  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-
-  let highlights = '';
-  if (longRun) {
-    highlights += `<div class="week-ahead-highlight"><span class="label">🛣️ Long</span><span class="value">${dayLabels[longRun.dayIdx]} · ${longRun.day.miles} mi</span></div>`;
-  }
-  if (quality) {
-    const icon = quality.day.type === 'Tempo' ? '⚡' : '🔥';
-    highlights += `<div class="week-ahead-highlight"><span class="label">${icon} ${quality.day.type}</span><span class="value">${dayLabels[quality.dayIdx]} · ${quality.day.miles} mi</span></div>`;
-  }
-  const strDays = (strengthSchedule || []).map(s => s.day);
-  if (strDays.length) {
-    highlights += `<div class="week-ahead-highlight"><span class="label">💪 Strength</span><span class="value">${strDays.join(', ')}</span></div>`;
-  }
-
-  return `
-    <div class="week-ahead-card">
-      <div class="week-ahead-tag">Week Ahead</div>
-      <div class="week-ahead-title">Week ${week.week} · ${escape(week.phase || '')}</div>
-      <div class="week-ahead-highlights">${highlights}</div>
-      <div class="week-ahead-progress">
-        <div class="week-ahead-progress-label">
-          <span>${progress.done} of ${progress.planned} mi this week</span>
-          <span class="pct">${pct}%</span>
-        </div>
-        <div class="week-ahead-progress-bar">
-          <div class="week-ahead-progress-fill" style="width:${Math.min(100, pct)}%"></div>
-        </div>
-      </div>
-      <div class="week-ahead-tip">💡 ${tip}</div>
-    </div>`;
-}
-
 // ─── WELLNESS CARD ───
 function renderWellnessCard() {
   const today = todayISO();
@@ -5552,13 +5404,13 @@ function renderHome() {
   // The hero now shows both run and strength as session rows. When a user
   // taps "Log run" or "Mark done" in the hero, the corresponding check-in
   // form expands inline below the hero in this slot.
-  const formSlot = document.getElementById('strength-today-section');
+  const formSlot = document.getElementById('checkin-form-section');
   if (formSlot) {
     if (checkInForm.type === 'run') {
       // Build a summary line that mirrors what the hero shows
       const todayPlanned = week && week.days && week.days[dayIdx];
       const planIcon = todayPlanned ? (TYPE_ICONS[todayPlanned.type] || '🏃') : '🏃';
-      const planMiles = todayPlanned && todayPlanned.miles ? ` · ${todayPlanned.miles} mi` : '';
+      const planMiles = todayPlanned && todayPlanned.miles ? ` · ${escape(String(todayPlanned.miles))} mi` : '';
       const runSummary = todayPlanned
         ? `${planIcon} ${escape(todayPlanned.type)}${planMiles}`
         : '🏃 Run';
