@@ -1409,6 +1409,22 @@
     margin-top: 4px;
     line-height: 1.4;
   }
+  .pace-source-badge {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: var(--accent);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    line-height: 1.4;
+  }
+  .pace-source-badge.static {
+    color: var(--ink-mid);
+    background: var(--bg-elev-2);
+    border-color: var(--border);
+  }
 
   /* Holistic guidance cards */
   .holistic-card {
@@ -3413,6 +3429,7 @@ function getCheckIn(dateISO, type) {
 function saveCheckIn(dateISO, type, data) {
   if (!checkIns[dateISO]) checkIns[dateISO] = {};
   checkIns[dateISO][type] = data;
+  invalidateDynamicPaceCache();
   // Persist immediately by updating the storage payload
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -4122,6 +4139,7 @@ function deleteLogEntry(date, type) {
   if (!checkIns[date] || !checkIns[date][type]) return;
   delete checkIns[date][type];
   if (Object.keys(checkIns[date]).length === 0) delete checkIns[date];
+  invalidateDynamicPaceCache();
   // Persist
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -4826,12 +4844,160 @@ function paceZoneReason(z) {
 }
 
 function getPaceForWorkout(type) {
-  if (!plan || !plan.paceZones) return '';
-  const pz = plan.paceZones;
-  if (type === 'Easy' || type === 'Long') return paceZoneValue(pz.easy);
-  if (type === 'Tempo') return paceZoneValue(pz.tempo) || paceZoneValue(pz.marathon);
-  if (type === 'Intervals') return paceZoneValue(pz.interval);
+  // Try dynamic zones first (Riegel/Daniels from logged runs incl.
+  // backfill); fall back to AI-set zones when data is too sparse.
+  const dynamic = computeDynamicPaceZones();
+  const useDynamic = dynamic && dynamic._sample.total >= 2;
+  const source = useDynamic ? dynamic : (plan && plan.paceZones);
+  if (!source) return '';
+  if (type === 'Easy' || type === 'Long') return paceZoneValue(source.easy);
+  if (type === 'Tempo') return paceZoneValue(source.tempo) || paceZoneValue(source.marathon);
+  if (type === 'Intervals') return paceZoneValue(source.interval);
   return '';
+}
+
+// ─── Dynamic pace zones from logged runs (Runna / Strava methodology) ──
+//
+// Industry-standard approach used by Runna, Garmin Coach, and Strava
+// fitness analytics:
+//
+//   1. Find the runner's best recent EFFORT (highest predicted race
+//      performance). Any logged run ≥ 1 mile counts as a candidate;
+//      we estimate its 5K-equivalent time using Riegel's formula:
+//
+//         T2 = T1 × (D2 / D1)^1.06
+//
+//      This is the standard race-time predictor (Pete Riegel, 1981) used
+//      by every running calculator. The fastest 5K-equivalent in the
+//      runner's history defines their current fitness.
+//
+//   2. Derive Daniels-style training pace zones from that 5K pace, using
+//      the offsets every coach references (Jack Daniels' Running Formula):
+//
+//         Easy      = 5K pace + 90–120 sec/mi
+//         Marathon  = 5K pace + 35–45 sec/mi
+//         Threshold = 5K pace + 15–25 sec/mi  (a.k.a. Tempo)
+//         Interval  = 5K pace − 0–10 sec/mi   (≈ 5K race pace)
+//
+//   3. If the runner has ≥3 actual EASY runs logged, override the
+//      derived easy zone with their measured easy pace — easy pace is
+//      driven more by personal preference than by VO2max, and runners
+//      typically self-select an easy pace that the model should respect.
+//
+//   4. Recency: only count efforts from the last 90 days. Older efforts
+//      represent past fitness, not current.
+//
+//   5. Fall back to plan.paceZones (the AI-set values) when there isn't
+//      enough data — generally ≥1 effort run OR ≥3 easy runs.
+//
+let _dynamicPaceCache = null;
+function invalidateDynamicPaceCache() { _dynamicPaceCache = null; }
+
+function computeDynamicPaceZones() {
+  if (_dynamicPaceCache) return _dynamicPaceCache;
+
+  const RECENCY_DAYS = 90;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RECENCY_DAYS);
+  const cutoffISO = cutoff.toISOString().slice(0, 10);
+
+  // ── Step 1: collect every usable logged run ──
+  const allRuns = []; // {iso, distMi, timeMin, paceMin, actualType}
+  Object.keys(checkIns || {}).forEach(iso => {
+    if (iso < cutoffISO) return;
+    const ci = checkIns[iso] && checkIns[iso].run;
+    if (!ci || ci.status !== 'done') return;
+    const dist = parseFloat(ci.distance);
+    const mins = parseDurationToMinutes(ci.duration);
+    if (!dist || !mins || dist < 1) return;
+    const pace = mins / dist;
+    if (pace < 4 || pace > 16) return; // sanity
+    allRuns.push({ iso, distMi: dist, timeMin: mins, paceMin: pace, actualType: ci.actualType || '' });
+  });
+
+  if (allRuns.length === 0) return null;
+
+  // ── Step 2: predict 5K-equivalent time for each run via Riegel ──
+  // T_5k = T_run × (5K_dist / run_dist)^1.06
+  const FIVE_K_MI = 3.10686;
+  const RIEGEL_EXP = 1.06;
+  const predict5K = (distMi, timeMin) => {
+    return timeMin * Math.pow(FIVE_K_MI / distMi, RIEGEL_EXP);
+  };
+
+  // Best (fastest) predicted 5K time — this is the runner's current fitness anchor
+  let bestEffort = null;
+  allRuns.forEach(r => {
+    const pred5k = predict5K(r.distMi, r.timeMin);
+    if (!bestEffort || pred5k < bestEffort.pred5k) {
+      bestEffort = { ...r, pred5k };
+    }
+  });
+
+  if (!bestEffort) return null;
+
+  const fiveKPaceMin = bestEffort.pred5k / FIVE_K_MI; // min/mi at 5K pace
+
+  // ── Step 3: derive zones using Daniels-style offsets ──
+  // Returns {low, high} in decimal min/mi (low = faster end)
+  const zoneFromOffsets = (loSec, hiSec) => ({
+    low:  fiveKPaceMin + loSec / 60,
+    high: fiveKPaceMin + hiSec / 60
+  });
+  const easyDerived     = zoneFromOffsets(90, 120); // easy: 5K + 1:30 to 2:00
+  const marathonZone    = zoneFromOffsets(35, 45);
+  const tempoZone       = zoneFromOffsets(15, 25);
+  const intervalZone    = zoneFromOffsets(-5, 5);   // around 5K pace
+
+  // ── Step 4: prefer measured easy pace when we have enough samples ──
+  const easySamples = allRuns
+    .filter(r => r.actualType === 'Easy' || r.actualType === 'Long' || r.actualType === '')
+    .map(r => r.paceMin)
+    .sort((a, b) => a - b);
+  let easyZone = easyDerived;
+  let easySource = `derived from your fastest effort`;
+  if (easySamples.length >= 3) {
+    // Use 25th-75th percentile of measured easy paces
+    const p25 = easySamples[Math.floor(easySamples.length * 0.25)];
+    const p75 = easySamples[Math.floor(easySamples.length * 0.75)];
+    easyZone = { low: p25, high: p75 };
+    easySource = `your measured pace across ${easySamples.length} easy runs`;
+  }
+
+  // ── Format helpers ──
+  const minToPace = (m) => {
+    const mm = Math.floor(m);
+    let ss = Math.round((m - mm) * 60);
+    if (ss === 60) return `${mm + 1}:00`;
+    return `${mm}:${String(ss).padStart(2, '0')}`;
+  };
+  const fmtZone = (range) => ({
+    value: `${minToPace(range.low)}–${minToPace(range.high)}/mi`
+  });
+
+  const effortDate = new Date(bestEffort.iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const effortPace = minToPace(bestEffort.paceMin);
+  const effortDist = bestEffort.distMi.toFixed(1);
+  const fiveKLabel = `${minToPace(fiveKPaceMin)}/mi`;
+  const sourceLine = `Based on your ${effortDist}mi @ ${effortPace}/mi on ${effortDate} — predicted 5K pace ${fiveKLabel}`;
+
+  const result = {
+    easy:     { ...fmtZone(easyZone),     reason: easySource },
+    marathon: { ...fmtZone(marathonZone), reason: sourceLine },
+    tempo:    { ...fmtZone(tempoZone),    reason: sourceLine },
+    interval: { ...fmtZone(intervalZone), reason: sourceLine },
+    _sample: {
+      easy: easySamples.length,
+      total: allRuns.length,
+      bestEffortISO: bestEffort.iso,
+      bestEffortPace: effortPace,
+      bestEffortDist: effortDist,
+      predicted5K: fiveKLabel
+    },
+    _methodology: 'riegel+daniels'
+  };
+  _dynamicPaceCache = result;
+  return result;
 }
 
 // Parse a pace string like "11:15-11:50/mi" or "8:30/mi" → minutes per mile (midpoint)
@@ -6270,15 +6436,21 @@ function renderPerformance() {
   renderMileageProgressionChart();
   renderWeeklyReviewSection();
 
-  // Pace zones (value + optional reason)
-  const pz = plan.paceZones || {};
+  // Pace zones — prefer dynamic (Riegel/Daniels from logged runs)
+  // over the static AI-set zones in plan.paceZones.
+  const dynamicZones = computeDynamicPaceZones();
+  const useDynamic = dynamicZones && dynamicZones._sample.total >= 2;
+  const pz = useDynamic ? dynamicZones : (plan.paceZones || {});
   const zones = [
     { key: 'easy',     label: 'Easy' },
     { key: 'marathon', label: 'Marathon' },
     { key: 'tempo',    label: 'Tempo' },
     { key: 'interval', label: 'Interval' },
   ];
-  document.getElementById('pace-zones').innerHTML = zones.filter(z => pz[z.key]).map(z => {
+  const sourceBadge = useDynamic
+    ? `<div class="pace-source-badge">⚡ Adapted from your last ${dynamicZones._sample.total} runs · predicted 5K ${dynamicZones._sample.predicted5K}</div>`
+    : `<div class="pace-source-badge static">📋 From your AI plan — log a few runs to adapt</div>`;
+  document.getElementById('pace-zones').innerHTML = sourceBadge + zones.filter(z => pz[z.key]).map(z => {
     const val = paceZoneValue(pz[z.key]);
     const reason = paceZoneReason(pz[z.key]);
     return `<div class="pace-card">
