@@ -33,7 +33,16 @@ After clasp push, **bump the deployment version** in the Apps Script editor (Dep
 2. In the Apps Script editor: **Project Settings → Script Properties → Add property**
    - Property: `GEMINI_API_KEY`
    - Value: your key
-3. Never commit this key to git
+3. Also add: `APP_PASSCODE` = a shared word/phrase friends use to unlock the app
+4. Never commit either key to git
+
+## Privacy rules (do not violate)
+
+- **Shared passcode required.** All API actions except `ping` and `verifyPasscode` check `APP_PASSCODE` from script properties. Never bypass this check.
+- **Strava GPS data must never reach Gemini.** When v2 ships, the Apps Script must extract only summary metrics (distance, duration, avg/max HR, pace, elevation) — never the polyline or stream coordinates. Even if a coach prompt would benefit from a route, the privacy rule wins.
+- **Strava OAuth tokens must never reach the browser.** When v2 ships, store tokens server-side in Apps Script Script Properties only. The frontend never sees the access or refresh token.
+- **No persistent server storage of plans yet.** Plans live in browser localStorage. Multi-device sync is deferred — adding it requires user identity, which is a separate decision.
+- **Consent screen must be shown before first use.** Don't remove the consent gate.
 
 ## MVP Scope
 

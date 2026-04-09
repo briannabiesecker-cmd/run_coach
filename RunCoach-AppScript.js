@@ -10,6 +10,18 @@
 
 var GEMINI_MODEL = 'gemini-2.5-flash';
 
+// ──────────────────────────────────────────────────
+// Auth: shared passcode required for all non-public actions.
+// Set APP_PASSCODE in Project Settings → Script Properties.
+// 'ping' and 'verifyPasscode' are exempt (used for connectivity + login).
+// ──────────────────────────────────────────────────
+function checkPasscode(supplied) {
+  var expected = PropertiesService.getScriptProperties().getProperty('APP_PASSCODE');
+  if (!expected) return { ok: false, error: 'APP_PASSCODE not set in script properties.' };
+  if (!supplied || supplied !== expected) return { ok: false, error: 'Unauthorized' };
+  return { ok: true };
+}
+
 function doGet(e) {
   var callback = e.parameter.callback || 'callback';
   var action   = e.parameter.action || '';
@@ -17,9 +29,13 @@ function doGet(e) {
 
   try {
     if (action === 'ping') {
-      result = { ok: true, version: 'v1', ts: new Date().toISOString() };
+      result = { ok: true, version: 'v2', ts: new Date().toISOString() };
+    } else if (action === 'verifyPasscode') {
+      result = checkPasscode(e.parameter.passcode);
     } else if (action === 'coach') {
-      result = coach(e.parameter);
+      var auth = checkPasscode(e.parameter.passcode);
+      if (!auth.ok) { result = { error: auth.error }; }
+      else { result = coach(e.parameter); }
     } else {
       result = { error: 'Unknown action: ' + action };
     }
@@ -39,8 +55,12 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents || '{}');
     var action = body.action || '';
-    if (action === 'coach') {
-      result = coach(body);
+    if (action === 'verifyPasscode') {
+      result = checkPasscode(body.passcode);
+    } else if (action === 'coach') {
+      var auth = checkPasscode(body.passcode);
+      if (!auth.ok) { result = { error: auth.error }; }
+      else { result = coach(body); }
     } else {
       result = { error: 'Unknown action: ' + action };
     }

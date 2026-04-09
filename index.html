@@ -685,6 +685,38 @@
     <div class="status-pill" id="status-pill">Setup</div>
   </div>
 
+  <!-- ═════════ CONSENT VIEW ═════════ -->
+  <div id="view-consent" class="view hidden">
+    <div class="setup-hero">
+      <div class="setup-icon">🔒</div>
+      <div class="setup-title">Privacy & data</div>
+      <div class="setup-sub">Quick read before we start</div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;color:var(--ink-mid);line-height:1.7;">
+        <p style="margin-bottom:10px;"><strong style="color:var(--ink);">What we collect:</strong> Race goals, weekly mileage, screenshots you upload. (Later, with your permission: Strava run summaries — never GPS routes.)</p>
+        <p style="margin-bottom:10px;"><strong style="color:var(--ink);">Where it goes:</strong> Your training plan is stored in your browser only. Form data and screenshots are sent to Google Gemini once to build your plan, then forgotten by us.</p>
+        <p><strong style="color:var(--ink);">What you can do:</strong> Click "Start a new plan" any time to delete everything. We have no account for you — clearing your browser deletes you from the app entirely.</p>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="acceptConsent()" style="margin-top:16px;">I understand</button>
+  </div>
+
+  <!-- ═════════ PASSCODE VIEW ═════════ -->
+  <div id="view-passcode" class="view hidden">
+    <div class="setup-hero">
+      <div class="setup-icon">🔑</div>
+      <div class="setup-title">Enter passcode</div>
+      <div class="setup-sub">Ask whoever shared this app with you</div>
+    </div>
+    <div id="passcode-alert" class="alert error hidden"></div>
+    <div class="field">
+      <label>Passcode</label>
+      <input type="password" id="passcode-input" autocomplete="off" placeholder="••••••••" />
+    </div>
+    <button class="btn-primary" id="passcode-btn" onclick="submitPasscode()">Unlock</button>
+  </div>
+
   <!-- ═════════ SETUP VIEW ═════════ -->
   <div id="view-setup" class="view">
     <div class="setup-hero">
@@ -855,6 +887,8 @@
 // ════════════════════════════════════════════════════
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQ4eUheeyTtZWlET0IhZBYbr98Pv6_dFHYsz-xDICEvh44CikuDHXebvyIOIY83FnGKg/exec';
 const STORAGE_KEY = 'runCoachPlan_v1';
+const CONSENT_KEY = 'runCoachConsent_v1';
+const PASSCODE_KEY = 'runCoachPasscode_v1';
 
 const PHASE_COLORS = {
   'Base': '#00C896',
@@ -916,10 +950,79 @@ function getPhaseColor(phaseName) {
 }
 
 function showView(name) {
-  ['setup', 'loading', 'dashboard'].forEach(v => {
+  ['consent', 'passcode', 'setup', 'loading', 'dashboard'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
+}
+
+// ════════════════════════════════════════════════════
+// CONSENT
+// ════════════════════════════════════════════════════
+function hasConsent() {
+  return localStorage.getItem(CONSENT_KEY) === '1';
+}
+
+function acceptConsent() {
+  localStorage.setItem(CONSENT_KEY, '1');
+  routeNext();
+}
+
+// ════════════════════════════════════════════════════
+// PASSCODE
+// ════════════════════════════════════════════════════
+function getPasscode() {
+  return localStorage.getItem(PASSCODE_KEY) || '';
+}
+
+async function submitPasscode() {
+  const input = document.getElementById('passcode-input');
+  const code  = (input.value || '').trim();
+  const alertEl = document.getElementById('passcode-alert');
+  const btn = document.getElementById('passcode-btn');
+  alertEl.classList.add('hidden');
+  if (!code) {
+    alertEl.textContent = 'Enter a passcode.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  try {
+    const res = await postJson({ action: 'verifyPasscode', passcode: code });
+    if (res && res.ok) {
+      localStorage.setItem(PASSCODE_KEY, code);
+      input.value = '';
+      routeNext();
+    } else {
+      alertEl.textContent = (res && res.error) || 'Wrong passcode.';
+      alertEl.classList.remove('hidden');
+    }
+  } catch (e) {
+    alertEl.textContent = 'Could not reach server: ' + e.message;
+    alertEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Unlock';
+  }
+}
+
+function clearPasscode() {
+  localStorage.removeItem(PASSCODE_KEY);
+}
+
+// ════════════════════════════════════════════════════
+// ROUTING
+// ════════════════════════════════════════════════════
+function routeNext() {
+  if (!hasConsent()) { showView('consent'); return; }
+  if (!getPasscode()) { showView('passcode'); return; }
+  if (loadPlan()) {
+    renderDashboard();
+    showView('dashboard');
+  } else {
+    showView('setup');
+  }
 }
 
 function switchTab(tab) {
@@ -1016,6 +1119,7 @@ async function submitForm() {
   try {
     const result = await postJson({
       action: 'coach',
+      passcode: getPasscode(),
       raceDistance: distance,
       raceDate: date,
       raceName: raceName,
@@ -1025,7 +1129,14 @@ async function submitForm() {
       screenshots: uploadedFiles.map(f => f.base64)
     });
 
-    if (result.error) throw new Error(result.error);
+    if (result.error) {
+      if (result.error === 'Unauthorized') {
+        clearPasscode();
+        showView('passcode');
+        return;
+      }
+      throw new Error(result.error);
+    }
     if (!result.result) throw new Error('Empty response');
 
     // Override raceName if user provided one
@@ -1267,14 +1378,14 @@ async function postJson(body) {
 // INIT
 // ════════════════════════════════════════════════════
 function init() {
-  if (loadPlan()) {
-    renderDashboard();
-    showView('dashboard');
-  } else {
-    showView('setup');
-  }
+  routeNext();
 }
 init();
+
+// Submit passcode on Enter key
+document.getElementById('passcode-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitPasscode();
+});
 </script>
 </body>
 </html>
