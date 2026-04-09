@@ -30,4 +30,4 @@ var PAYLOAD_VERSION = 1;
 
 // Diagnostic version string returned by ?action=ping. Bump manually when
 // shipping a release worth labeling.
-var BACKEND_VERSION = 'v3-tier1-refactor';
+var BACKEND_VERSION = 'v3-tier1-with-quota-ui';

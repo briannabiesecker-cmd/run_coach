@@ -2810,6 +2810,7 @@
   <div id="settings-modal" class="modal-backdrop" onclick="if(event.target===this)closeSettingsMenu()">
     <div class="modal-card">
       <div class="modal-title">Settings</div>
+      <div id="settings-quota-status" style="font-size:11px;color:var(--ink-light);text-align:center;margin-bottom:10px;">Loading quota…</div>
       <div class="settings-list">
         <button class="settings-item" onclick="closeSettingsMenu();openBackfill();">
           <span class="settings-icon">📥</span>
@@ -4683,6 +4684,29 @@ function submitManualWorkout() {
 
 function openSettingsMenu() {
   document.getElementById('settings-modal').classList.add('open');
+  // Fetch today's Gemini quota usage and display it. Best-effort —
+  // failures show "—" rather than blocking the menu.
+  const el = document.getElementById('settings-quota-status');
+  if (el) {
+    el.textContent = 'Loading quota…';
+    fetch(SCRIPT_URL + '?action=quotaUsed&callback=qcb', { method: 'GET' })
+      .then(r => r.text())
+      .then(text => {
+        // Strip JSONP wrapper: qcb({...}) → {...}
+        const json = text.replace(/^qcb\((.*)\);?\s*$/, '$1');
+        const data = JSON.parse(json);
+        if (data && data.success) {
+          const used = data.geminiCalls || 0;
+          const limit = data.freeTierDailyLimit || 250;
+          const pct = Math.round((used / limit) * 100);
+          const warn = pct >= 80 ? ' ⚠️' : '';
+          el.textContent = `Gemini today: ${used} / ${limit} (${pct}%)${warn}`;
+        } else {
+          el.textContent = 'Gemini quota: unavailable';
+        }
+      })
+      .catch(() => { el.textContent = 'Gemini quota: offline'; });
+  }
 }
 function closeSettingsMenu() {
   document.getElementById('settings-modal').classList.remove('open');
