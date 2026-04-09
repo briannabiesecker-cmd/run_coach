@@ -58,6 +58,298 @@
     position: relative;
   }
 
+  /* ─── Home v2 (Runna-style) ──────────────────────── */
+  .top-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--ink-mid);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover {
+    color: var(--ink);
+    border-color: var(--border-strong);
+  }
+
+  /* Race countdown hero */
+  .race-hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0a1628 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .race-hero-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .race-hero-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 4px;
+  }
+  .race-hero-days {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .race-hero-days .units {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-mid);
+    margin-left: 4px;
+  }
+  .race-hero-date {
+    font-size: 12px;
+    color: var(--ink-light);
+  }
+  .race-hero-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .race-hero-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 1s ease;
+  }
+
+  /* Workout hero */
+  .workout-hero {
+    background: linear-gradient(135deg, #0f2744 0%, #0a1628 60%, #041122 100%);
+    border: 1px solid rgba(0,200,150,0.2);
+    border-radius: 20px;
+    padding: 22px 22px 18px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .workout-hero::after {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, rgba(0,200,150,0.18) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .workout-hero-tags {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-phase {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .workout-hero-readiness {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+  }
+  .workout-hero-readiness.green  { background: rgba(0,200,150,0.15); color: var(--accent); border-color: var(--accent-border); }
+  .workout-hero-readiness.yellow { background: rgba(250,204,21,0.12); color: #facc15; border-color: rgba(250,204,21,0.4); }
+  .workout-hero-readiness.red    { background: rgba(239,68,68,0.12); color: #fca5a5; border-color: rgba(239,68,68,0.4); }
+  .workout-hero-label {
+    font-size: 12px;
+    color: var(--ink-mid);
+    margin-top: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-title {
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1.1;
+    margin-top: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-pace {
+    display: inline-block;
+    margin-top: 8px;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    border-radius: 10px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-purpose {
+    font-size: 13px;
+    color: var(--ink-mid);
+    margin-top: 14px;
+    line-height: 1.55;
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-purpose strong { color: var(--ink); font-weight: 700; }
+  .workout-hero-readiness-warn {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(250,204,21,0.08);
+    border-left: 3px solid #facc15;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--ink);
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+  }
+  .workout-hero-readiness-warn.red {
+    background: rgba(239,68,68,0.1);
+    border-left-color: #ef4444;
+  }
+  .workout-hero-cta {
+    width: 100%;
+    margin-top: 16px;
+    background: var(--accent);
+    color: #0a1628;
+    border: none;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 800;
+    padding: 16px;
+    border-radius: 14px;
+    cursor: pointer;
+    position: relative;
+    z-index: 1;
+    letter-spacing: 0.3px;
+    transition: opacity 0.15s;
+  }
+  .workout-hero-cta:hover { opacity: 0.92; }
+  .workout-hero-cta.done {
+    background: rgba(0,200,150,0.15);
+    color: var(--accent);
+    border: 1px solid var(--accent-border);
+  }
+
+  /* This week strip */
+  .week-strip-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .week-strip-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  /* Wellness footer (collapsed mini card) */
+  .wellness-footer {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .wellness-footer:hover { border-color: var(--border-strong); }
+  .wellness-footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .wellness-footer-prompt {
+    font-size: 13px;
+    color: var(--ink-mid);
+  }
+  .wellness-footer-stats {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .wellness-footer-stats .num { color: #93c5fd; }
+  .wellness-footer-cta {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Settings menu */
+  .settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .settings-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: inherit;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .settings-item:hover {
+    border-color: var(--border-strong);
+    background: rgba(255,255,255,0.04);
+  }
+  .settings-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .settings-text { flex: 1; }
+  .settings-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .settings-desc {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 2px;
+  }
+
   /* ─── Top bar ──────────────────────────────────── */
   .top-bar {
     display: flex;
@@ -2174,7 +2466,41 @@
       <div class="brand-tag">Run Coach</div>
       <div class="brand-greeting" id="greeting">Hey runner 👋</div>
     </div>
-    <div class="status-pill" id="status-pill">Setup</div>
+    <div class="top-bar-actions">
+      <div class="status-pill" id="status-pill">Setup</div>
+      <button class="icon-btn" id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
+    </div>
+  </div>
+
+  <!-- Settings menu (modal) -->
+  <div id="settings-modal" class="modal-backdrop" onclick="if(event.target===this)closeSettingsMenu()">
+    <div class="modal-card">
+      <div class="modal-title">Settings</div>
+      <div class="settings-list">
+        <button class="settings-item" onclick="closeSettingsMenu();openBackfill();">
+          <span class="settings-icon">📥</span>
+          <div class="settings-text">
+            <div class="settings-label">Backfill from Strava CSV</div>
+            <div class="settings-desc">Import historical runs</div>
+          </div>
+        </button>
+        <button class="settings-item" onclick="closeSettingsMenu();openStrengthEdit();">
+          <span class="settings-icon">💪</span>
+          <div class="settings-text">
+            <div class="settings-label">Edit strength schedule</div>
+            <div class="settings-desc">Manage your weekly strength sessions</div>
+          </div>
+        </button>
+        <button class="settings-item" onclick="closeSettingsMenu();resetPlan();">
+          <span class="settings-icon">🔄</span>
+          <div class="settings-text">
+            <div class="settings-label">Start a new plan</div>
+            <div class="settings-desc">Erase current plan and restart</div>
+          </div>
+        </button>
+      </div>
+      <button class="btn-ghost" onclick="closeSettingsMenu()" style="margin-top:14px;">Close</button>
+    </div>
   </div>
 
   <!-- ═════════ CONSENT VIEW ═════════ -->
@@ -2387,37 +2713,36 @@
   <!-- ═════════ DASHBOARD VIEWS ═════════ -->
   <div id="view-dashboard" class="view hidden">
 
-    <!-- ─── HOME TAB ─── -->
+    <!-- ─── HOME TAB (Runna-style rebuild) ─── -->
     <div id="tab-home" class="tab active">
-      <div id="wellness-section"></div>
+      <!-- Top: race countdown (primary hero) -->
+      <div id="race-countdown-hero"></div>
 
-      <!-- Hero card with today's workout -->
-      <div class="hero" id="hero-card">
-        <div class="hero-top-row">
-          <div class="hero-tag" id="hero-tag">Loading</div>
-          <div class="readiness-pill" id="readiness-pill"></div>
-        </div>
-        <div class="hero-title">Today's Workout</div>
-        <div class="hero-workout" id="hero-workout">—</div>
-        <div class="hero-meta" id="hero-meta">—</div>
-        <div id="readiness-banner"></div>
-        <div class="day-strip" id="day-strip"></div>
-      </div>
+      <!-- Workout HERO -->
+      <div id="workout-hero"></div>
 
-      <div id="week-ahead-section"></div>
-      <div id="intention-section"></div>
-      <div id="run-checkin-section"></div>
+      <!-- This week strip -->
+      <div id="week-strip-section"></div>
+
+      <!-- Strength today (only if scheduled) -->
       <div id="strength-today-section"></div>
 
-      <div class="section-label">Race Countdown</div>
-      <div id="race-countdowns"></div>
+      <!-- Wellness footer (collapsed) -->
+      <div id="wellness-section"></div>
 
-      <div class="section-label">Quick Stats</div>
-      <div class="stat-grid" id="quick-stats"></div>
-
-      <button class="btn-ghost" onclick="openBackfill()" style="margin-top:20px;">📥 Backfill runs from Strava CSV</button>
-      <button class="btn-ghost" onclick="openStrengthEdit()" style="margin-top:8px;">💪 Edit strength schedule</button>
-      <button class="btn-ghost" onclick="resetPlan()" style="margin-top:8px;">Start a new plan</button>
+      <!-- Hidden ids preserved for legacy renderers (can be removed once
+           all callers are migrated) -->
+      <div id="hero-tag" class="hidden"></div>
+      <div id="hero-workout" class="hidden"></div>
+      <div id="hero-meta" class="hidden"></div>
+      <div id="readiness-pill" class="hidden"></div>
+      <div id="readiness-banner" class="hidden"></div>
+      <div id="day-strip" class="hidden"></div>
+      <div id="week-ahead-section" class="hidden"></div>
+      <div id="intention-section" class="hidden"></div>
+      <div id="run-checkin-section" class="hidden"></div>
+      <div id="quick-stats" class="hidden"></div>
+      <div id="race-countdowns" class="hidden"></div>
     </div>
 
     <!-- ─── PLAN TAB ─── -->
@@ -4642,63 +4967,112 @@ function renderCheckInCard(type, summary) {
 
 // ─── HOME TAB ───
 function renderHome() {
+  if (!plan || !plan.weeks) return;
   const wkIdx = getCurrentWeekIndex();
   const dayIdx = getCurrentDayIndex();
-  const week = plan.weeks && plan.weeks[wkIdx];
+  const week = plan.weeks[wkIdx];
   const today = week && week.days && week.days[dayIdx];
 
-  // Hero
-  document.getElementById('hero-tag').textContent =
-    week ? `Week ${week.week} · ${week.phase || ''}` : 'Plan Complete';
-
-  // Readiness flag
-  const readiness = computeReadiness();
-  const pill = document.getElementById('readiness-pill');
-  const dotIcon = readiness.status === 'green' ? '🟢' : readiness.status === 'yellow' ? '🟡' : '🔴';
-  pill.className = 'readiness-pill ' + readiness.status;
-  pill.innerHTML = `${dotIcon} ${escape(readiness.message)}`;
-  const banner = document.getElementById('readiness-banner');
-  if (readiness.status !== 'green' && readiness.suggestion) {
-    const flagsList = readiness.flags.map(f => f.text).join(' · ');
-    banner.innerHTML = `
-      <div class="readiness-banner ${readiness.status}">
-        <div class="rb-suggest">${escape(readiness.suggestion)}</div>
-        <div class="rb-flags">${escape(flagsList)}</div>
-      </div>`;
-  } else {
-    banner.innerHTML = '';
-  }
-
-  // Check today's strength early so we can mention it in the hero
-  const todayShortHero = DAYS_FULL[dayIdx];
-  const todayStrengthHero = getStrengthForDay(todayShortHero);
-
-  if (today) {
-    const icon = TYPE_ICONS[today.type] || '🏃';
-    let workoutText = `${icon} ${today.type}${today.miles ? ' · ' + today.miles + ' mi' : ''}`;
-    if (todayStrengthHero.length) workoutText += ' + 💪';
-    document.getElementById('hero-workout').textContent = workoutText;
-    let meta = today.note || '';
-    if (todayStrengthHero.length) {
-      const strSummary = todayStrengthHero.map(s => `${s.time}${s.label ? ' ' + s.label : ''}`).join(' · ');
-      meta = meta ? meta + '  ·  💪 ' + strSummary : '💪 ' + strSummary;
+  // ─── Race countdown hero (top) ───
+  const raceEl = document.getElementById('race-countdown-hero');
+  if (raceEl) {
+    if (plan.raceDate) {
+      const days = daysBetween(todayISO(), plan.raceDate);
+      const totalDays = plan.weeks.length * 7;
+      const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
+      const dateLabel = new Date(plan.raceDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      raceEl.innerHTML = `
+        <div class="race-hero">
+          <div class="race-hero-name">${escape(plan.raceName || 'Your Race')}</div>
+          <div class="race-hero-row">
+            <div class="race-hero-days">${days}<span class="units">days</span></div>
+            <div class="race-hero-date">${escape(dateLabel)}</div>
+          </div>
+          <div class="race-hero-bar"><div class="race-hero-bar-fill" style="width:${pct}%"></div></div>
+        </div>`;
+    } else {
+      raceEl.innerHTML = '';
     }
-    document.getElementById('hero-meta').textContent = meta;
-  } else {
-    document.getElementById('hero-workout').textContent = '🏁 Race time';
-    document.getElementById('hero-meta').textContent = 'Trust your training';
   }
 
-  // Day strip — shows planned + actual check-in indicator
-  const dayLetters = ['M','T','W','T','F','S','S'];
-  const stripEl = document.getElementById('day-strip');
-  stripEl.innerHTML = '';
-  if (week && week.days) {
-    week.days.forEach((d, i) => {
-      const isToday = i === dayIdx;
-      const isPast = i < dayIdx;
+  // ─── Workout hero ───
+  const heroEl = document.getElementById('workout-hero');
+  if (heroEl) {
+    if (today) {
+      const readiness = computeReadiness();
+      const dotIcon = readiness.status === 'green' ? '🟢' : readiness.status === 'yellow' ? '🟡' : '🔴';
+      const todayShort = DAYS_FULL[dayIdx];
+      const todayStrengthHero = getStrengthForDay(todayShort);
+      const icon = TYPE_ICONS[today.type] || '🏃';
+      const milesText = today.miles ? ` · ${today.miles} mi` : '';
+      const strengthSuffix = todayStrengthHero.length ? ' + 💪' : '';
 
-      // Compute the calendar date for this day
+      // Pace target
+      const pace = getPaceForWorkout(today.type);
+      const paceBlock = pace ? `<div class="workout-hero-pace">Target pace: ${escape(pace)}</div>` : '';
+
+      // Purpose (from intention library, condensed)
+      const intent = INTENTION_LIB[today.type];
+      const purposeBlock = intent
+        ? `<div class="workout-hero-purpose"><strong>The point:</strong> ${escape(intent.purpose)}</div>`
+        : '';
+
+      // Today's note from plan
+      const noteBlock = today.note
+        ? `<div class="workout-hero-purpose" style="margin-top:8px;"><strong>Today:</strong> ${escape(today.note)}</div>`
+        : '';
+
+      // Strength inline note
+      const strengthBlock = todayStrengthHero.length
+        ? `<div class="workout-hero-purpose" style="margin-top:8px;"><strong>💪 Strength:</strong> ${todayStrengthHero.map(s => escape(s.time + (s.label ? ' ' + s.label : ''))).join(' · ')}</div>`
+        : '';
+
+      // Readiness warning banner
+      const readinessWarn = (readiness.status !== 'green' && readiness.suggestion)
+        ? `<div class="workout-hero-readiness-warn ${readiness.status}">${escape(readiness.suggestion)}</div>`
+        : '';
+
+      // Check-in status
+      const todayCheckIn = checkIns[todayISO()] && checkIns[todayISO()].run;
+      const isLogged = todayCheckIn && todayCheckIn.status;
+      const ctaLabel = isLogged
+        ? `✓ Logged · RPE ${todayCheckIn.rpe || '—'}`
+        : (today.type === 'Rest' ? 'Mark rest day complete' : 'Log this workout →');
+      const ctaClass = isLogged ? 'workout-hero-cta done' : 'workout-hero-cta';
+      const ctaAction = isLogged
+        ? `onclick="openCheckInForm('run', ${JSON.stringify(todayCheckIn).replace(/"/g, '&quot;')})"`
+        : `onclick="openCheckInForm('run')"`;
+
+      heroEl.innerHTML = `
+        <div class="workout-hero">
+          <div class="workout-hero-tags">
+            <div class="workout-hero-phase">Wk ${week.week} · ${escape(week.phase || '')}</div>
+            <div class="workout-hero-readiness ${readiness.status}">${dotIcon} ${escape(readiness.message)}</div>
+          </div>
+          <div class="workout-hero-label">Today's Workout</div>
+          <div class="workout-hero-title">${icon} ${escape(today.type)}${milesText}${strengthSuffix}</div>
+          ${paceBlock}
+          ${purposeBlock}
+          ${noteBlock}
+          ${strengthBlock}
+          ${readinessWarn}
+          <button class="${ctaClass}" ${ctaAction}>${ctaLabel}</button>
+        </div>`;
+    } else {
+      heroEl.innerHTML = `
+        <div class="workout-hero">
+          <div class="workout-hero-label">Race time</div>
+          <div class="workout-hero-title">🏁 Trust your training</div>
+        </div>`;
+    }
+  }
+
+  // ─── This week strip ───
+  const stripEl = document.getElementById('week-strip-section');
+  if (stripEl && week && week.days) {
+    const dayLetters = ['M','T','W','T','F','S','S'];
+    const cells = week.days.map((d, i) => {
+      const isToday = i === dayIdx;
       let hasActualRun = false;
       if (planStartDate) {
         const dt = new Date(planStartDate + 'T00:00:00');
@@ -4707,93 +5081,68 @@ function renderHome() {
         const ci = checkIns[iso] && checkIns[iso].run;
         if (ci && ci.status === 'done') hasActualRun = true;
       }
-
-      const cell = document.createElement('div');
-      cell.className = 'day-cell' + (isToday ? ' today' : (hasActualRun ? ' done' : (isPast ? ' past' : '')));
+      const cellClass = 'day-cell' + (isToday ? ' today' : (hasActualRun ? ' done' : ''));
       const icon = TYPE_ICONS[d.type] || '—';
       const dayShort = DAYS_FULL[i];
       const hasStrength = getStrengthForDay(dayShort).length > 0;
       const strengthMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
       const checkMark = hasActualRun ? '<div class="day-check">✓</div>' : '';
-      cell.innerHTML = `<div class="day-letter">${dayLetters[i]}</div><div class="day-icon">${icon}</div><div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>${checkMark}${strengthMark}`;
-      stripEl.appendChild(cell);
-    });
-  }
-
-  // Wellness section (always at top)
-  document.getElementById('wellness-section').innerHTML = renderWellnessCard();
-
-  // Week ahead card (after hero)
-  document.getElementById('week-ahead-section').innerHTML = renderWeekAheadCard();
-
-  // Intention card (the WHY of today's workout)
-  document.getElementById('intention-section').innerHTML = renderIntentionCard();
-
-  // Run check-in section (only if today has a non-Rest run)
-  const runCheckInEl = document.getElementById('run-checkin-section');
-  if (today && today.type && today.type !== 'Rest') {
-    const summary = `${TYPE_ICONS[today.type] || '🏃'} ${today.type}${today.miles ? ' · ' + today.miles + ' mi' : ''}`;
-    runCheckInEl.innerHTML = '<div class="section-label">Today\'s Run</div>' +
-      renderCheckInCard('run', summary);
-  } else {
-    runCheckInEl.innerHTML = '';
-  }
-
-  // Today's strength card (only if a session is scheduled today)
-  const todayShort = DAYS_FULL[dayIdx];
-  const todayStrength = getStrengthForDay(todayShort);
-  const strSection = document.getElementById('strength-today-section');
-  if (todayStrength.length) {
-    const strSummary = todayStrength.map(s => `💪 ${escape(s.time)} ${escape(s.label || 'Strength')}`).join(' · ');
-    strSection.innerHTML = '<div class="section-label">Today\'s Strength</div>' +
-      renderCheckInCard('strength', strSummary);
-  } else {
-    strSection.innerHTML = '';
-  }
-
-  // Race countdown
-  const raceEl = document.getElementById('race-countdowns');
-  raceEl.innerHTML = '';
-  if (plan.raceDate) {
-    const days = daysBetween(todayISO(), plan.raceDate);
-    const totalDays = plan.weeks ? plan.weeks.length * 7 : 100;
-    const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
-    raceEl.innerHTML = `
-      <div class="race-card">
-        <div class="race-card-head">
-          <div>
-            <div class="race-name">${escape(plan.raceName || 'Your Race')}</div>
-            <div class="race-meta">${escape(plan.raceDate)}</div>
-          </div>
-          <div>
-            <div class="race-days">${days}</div>
-            <div class="race-days-sub">days out</div>
-          </div>
-        </div>
-        <div class="race-progress"><div class="race-progress-fill" style="width:${pct}%"></div></div>
+      return `
+        <div class="${cellClass}">
+          <div class="day-letter">${dayLetters[i]}</div>
+          <div class="day-icon">${icon}</div>
+          <div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>
+          ${checkMark}${strengthMark}
+        </div>`;
+    }).join('');
+    stripEl.innerHTML = `
+      <div class="week-strip-card">
+        <div class="week-strip-label">This Week</div>
+        <div class="day-strip">${cells}</div>
       </div>`;
   }
 
-  // Quick stats
-  const totalMiles = (plan.weeks || []).reduce((s, w) => s + (w.totalMiles || 0), 0);
-  // ACTUAL miles done — sum all 'done' check-ins (including historical/backfilled)
-  let actualDone = 0;
-  let actualRuns = 0;
-  Object.keys(checkIns).forEach(iso => {
-    const ci = checkIns[iso] && checkIns[iso].run;
-    if (ci && ci.status === 'done') {
-      actualDone += ci.distance || 0;
-      actualRuns++;
+  // ─── Strength today (separate card if scheduled) ───
+  const todayShort2 = DAYS_FULL[dayIdx];
+  const todayStrength = getStrengthForDay(todayShort2);
+  const strSection = document.getElementById('strength-today-section');
+  if (strSection) {
+    if (todayStrength.length) {
+      const strSummary = todayStrength.map(s => `💪 ${escape(s.time)} ${escape(s.label || 'Strength')}`).join(' · ');
+      strSection.innerHTML = renderCheckInCard('strength', strSummary);
+    } else {
+      strSection.innerHTML = '';
     }
-  });
-  const peakWeek = (plan.weeks || []).reduce((max, w) => (w.totalMiles > (max.totalMiles || 0) ? w : max), {});
+  }
 
-  document.getElementById('quick-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${actualRuns}</div><div class="stat-label">Runs Done</div><div class="stat-sub">all-time</div></div>
-    <div class="stat-card"><div class="stat-value">${Math.round(actualDone)}</div><div class="stat-label">Miles Done</div><div class="stat-sub">all-time</div></div>
-    <div class="stat-card"><div class="stat-value">${totalMiles}</div><div class="stat-label">Plan Miles</div><div class="stat-sub">${plan.weeks ? plan.weeks.length : 0} weeks</div></div>
-    <div class="stat-card"><div class="stat-value">${peakWeek.totalMiles || 0}</div><div class="stat-label">Peak Week</div><div class="stat-sub">Wk ${peakWeek.week || '—'}</div></div>
-  `;
+  // ─── Wellness footer (collapsed) ───
+  const wellnessEl = document.getElementById('wellness-section');
+  if (wellnessEl) {
+    const todayWellness = wellness[todayISO()];
+    if (wellnessForm.open) {
+      // Show full form
+      wellnessEl.innerHTML = renderWellnessCard();
+    } else if (todayWellness) {
+      wellnessEl.innerHTML = `
+        <div class="wellness-footer" onclick="openWellnessForm()">
+          <div class="wellness-footer-row">
+            <div class="wellness-footer-stats">
+              💤 <span class="num">${todayWellness.sleep}/10</span>
+              &nbsp; 🦵 <span class="num">${todayWellness.soreness}/10</span>
+            </div>
+            <div class="wellness-footer-cta">Edit</div>
+          </div>
+        </div>`;
+    } else {
+      wellnessEl.innerHTML = `
+        <div class="wellness-footer" onclick="openWellnessForm()">
+          <div class="wellness-footer-row">
+            <div class="wellness-footer-prompt">How are you feeling today?</div>
+            <div class="wellness-footer-cta">Log →</div>
+          </div>
+        </div>`;
+    }
+  }
 }
 
 // ─── PLAN TAB ───
