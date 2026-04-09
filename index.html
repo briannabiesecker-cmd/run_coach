@@ -2618,22 +2618,52 @@ function findCol(headers, patterns) {
   return -1;
 }
 
+// Like findCol but returns the LAST matching column (Strava CSV has
+// duplicate "Distance" / "Elapsed Time" columns — first is display,
+// later one is the raw numeric value)
+function findColLast(headers, patterns) {
+  for (const p of patterns) {
+    const re = new RegExp(p, 'i');
+    let lastIdx = -1;
+    headers.forEach((h, i) => { if (re.test(h)) lastIdx = i; });
+    if (lastIdx !== -1) return lastIdx;
+  }
+  return -1;
+}
+
+// Find ALL indices matching the patterns (in order)
+function findColAll(headers, patterns) {
+  const out = [];
+  for (const p of patterns) {
+    const re = new RegExp(p, 'i');
+    headers.forEach((h, i) => { if (re.test(h)) out.push(i); });
+  }
+  return out;
+}
+
 // Parse Strava activities.csv
 function parseStravaCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.length > 0);
   if (!lines.length) return [];
   const headers = parseCSVLine(lines[0]);
 
-  // Find columns by pattern (Strava's CSV column names vary slightly by year)
+  // Strava CSV has duplicate columns: first is display (units depend on user
+  // setting — could be mi or km), second is raw meters/seconds. ALWAYS prefer
+  // the raw column to avoid unit confusion.
   const idxDate     = findCol(headers, ['^Activity Date$', 'Date']);
   const idxType     = findCol(headers, ['^Activity Type$', '^Type$']);
   const idxName     = findCol(headers, ['^Activity Name$', '^Name$']);
-  const idxDist     = findCol(headers, ['^Distance$']);
-  const idxDistRaw  = findCol(headers, ['^Distance\\.1$', 'Distance \\(meters\\)']);
-  const idxMoving   = findCol(headers, ['^Moving Time$', 'Moving Time \\(s\\)']);
-  const idxElapsed  = findCol(headers, ['^Elapsed Time$']);
-  const idxAvgHR    = findCol(headers, ['^Average Heart Rate$', 'Avg.* Heart Rate']);
-  const idxMaxHR    = findCol(headers, ['^Max Heart Rate$']);
+  // For distance: find all "Distance" columns. If there are 2+, use the LAST
+  // (raw meters). If only 1, fall back to it but assume meters if value > 1000.
+  const distIdxs    = findColAll(headers, ['^Distance$']);
+  const idxDistRaw  = distIdxs.length >= 2 ? distIdxs[distIdxs.length - 1] : (distIdxs[0] !== undefined ? distIdxs[0] : -1);
+  // Same trick for time: prefer "Moving Time" raw column
+  const movingIdxs  = findColAll(headers, ['^Moving Time$']);
+  const idxMoving   = movingIdxs.length >= 2 ? movingIdxs[movingIdxs.length - 1] : (movingIdxs[0] !== undefined ? movingIdxs[0] : -1);
+  const elapsedIdxs = findColAll(headers, ['^Elapsed Time$']);
+  const idxElapsed  = elapsedIdxs.length >= 2 ? elapsedIdxs[elapsedIdxs.length - 1] : (elapsedIdxs[0] !== undefined ? elapsedIdxs[0] : -1);
+  const avgHRIdxs   = findColAll(headers, ['^Average Heart Rate$', 'Avg.* Heart Rate']);
+  const idxAvgHR    = avgHRIdxs.length >= 2 ? avgHRIdxs[avgHRIdxs.length - 1] : (avgHRIdxs[0] !== undefined ? avgHRIdxs[0] : -1);
 
   const out = [];
   for (let i = 1; i < lines.length; i++) {
@@ -2646,22 +2676,24 @@ function parseStravaCSV(text) {
     if (isNaN(d)) continue;
     const isoDate = d.toISOString().slice(0, 10);
 
-    // Distance: prefer the display column (already in user's units, usually mi or km)
-    // Strava .1 column is in meters
+    // Distance: the raw column is always meters in Strava export, regardless
+    // of user's display preference. Convert to miles.
     let distMi = null;
-    if (idxDist >= 0) {
-      const v = parseFloat(cols[idxDist]);
-      if (!isNaN(v)) distMi = v;
+    if (idxDistRaw >= 0) {
+      const v = parseFloat(cols[idxDistRaw]);
+      if (!isNaN(v)) {
+        // Heuristic: if value > 200, assume meters (any reasonable run > 200m).
+        // Otherwise it's likely already in km or mi from a single-column CSV.
+        if (v > 200) {
+          distMi = v / 1609.344;
+        } else {
+          // Ambiguous single-column case — assume km (Strava default in many regions)
+          distMi = v / 1.609344;
+        }
+      }
     }
-    if (distMi == null && idxDistRaw >= 0) {
-      const meters = parseFloat(cols[idxDistRaw]);
-      if (!isNaN(meters)) distMi = meters / 1609.344;
-    }
-    // Heuristic: Strava sometimes outputs km as the display value. If the number
-    // looks suspiciously large for miles given the time, that's a hint — but for
-    // simplicity assume display is whatever the user set in Strava prefs.
 
-    // Duration: prefer Moving Time (seconds)
+    // Duration: Moving Time is in seconds (raw column). Format as h:mm:ss or m:ss.
     let durSec = null;
     if (idxMoving >= 0) {
       const v = parseFloat(cols[idxMoving]);
