@@ -36,6 +36,10 @@ After clasp push, **bump the deployment version** in the Apps Script editor (Dep
 3. Also add: `APP_PASSCODE` = a shared word/phrase friends use to unlock the app
 4. Never commit either key to git
 
+## Code QA agent
+
+When user says "QA the recent changes" / "review last commits" / "/qa", spawn an Explore agent in background using the prompt template in `QA_AGENT.md`. Default review window: last 10 commits. Reports back when done — agent runs in parallel so user keeps working.
+
 ## Privacy rules (do not violate)
 
 - **Shared passcode required.** All API actions except `ping` and `verifyPasscode` check `APP_PASSCODE` from script properties. Never bypass this check.
