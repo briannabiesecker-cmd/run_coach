@@ -432,6 +432,16 @@
     gap: 8px;
     margin-bottom: 14px;
   }
+  .hist-banner {
+    font-size: 11px;
+    color: var(--ink-light);
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .hist-banner strong { color: var(--ink); font-weight: 700; }
   .mp-stat {
     text-align: center;
   }
@@ -4984,11 +4994,12 @@ function renderMileageProgressionChart() {
     return { wkNum: w.week, planned, actual, isCurrent: wkIdx === currentIdx, isPast: wkIdx < currentIdx };
   });
 
-  // Combine historical + plan weeks for the chart
+  // Combine historical + plan weeks for the chart visual
   const data = historicalWeeks.concat(planData);
 
-  // Add historical actual miles to total
-  historicalWeeks.forEach(h => { totalActual += h.actual; });
+  // Historical miles tracked SEPARATELY — they show on the chart but
+  // compliance % only reflects the plan window (apples-to-apples).
+  const historicalMi = historicalWeeks.reduce((s, h) => s + h.actual, 0);
 
   // maxMi must consider both planned and historical actuals so historical bars
   // don't get clipped if they're larger than the planned weeks
@@ -5024,14 +5035,17 @@ function renderMileageProgressionChart() {
 
   el.innerHTML = `
     <div class="mileage-prog-card">
+      ${historicalMi > 0 ? `<div class="hist-banner">+ <strong>${Math.round(historicalMi)}</strong> mi from before plan started (not counted toward compliance)</div>` : ''}
       <div class="mileage-prog-stats">
         <div class="mp-stat">
           <div class="num">${totalActual.toFixed(0)}</div>
           <div class="label">Actual mi</div>
+          <div style="font-size:9px;color:var(--ink-faint);margin-top:1px;">in plan</div>
         </div>
         <div class="mp-stat">
           <div class="num">${totalPlanned.toFixed(0)}</div>
           <div class="label">Planned mi</div>
+          <div style="font-size:9px;color:var(--ink-faint);margin-top:1px;">to date</div>
         </div>
         <div class="mp-stat">
           <div class="num ${complianceClass}">${compliance}%</div>
