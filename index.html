@@ -594,6 +594,94 @@
     margin-top: 2px;
   }
 
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(7,15,30,0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-card {
+    background: #0f172a;
+    border: 1px solid var(--border-strong);
+    border-radius: 20px 20px 0 0;
+    padding: 22px 18px 28px;
+    width: 100%;
+    max-width: 430px;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.4);
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    text-align: center;
+  }
+  .modal-sub {
+    font-size: 13px;
+    color: var(--ink-mid);
+    text-align: center;
+    margin-top: 4px;
+    margin-bottom: 16px;
+  }
+  .swap-day-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .swap-day-row {
+    display: grid;
+    grid-template-columns: 50px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .swap-day-row:hover {
+    background: rgba(0,200,150,0.06);
+    border-color: var(--accent-border);
+  }
+  .swap-day-row .name {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .swap-day-row .desc {
+    font-size: 12px;
+    color: var(--ink-mid);
+  }
+  .swap-day-row .arrow {
+    color: var(--accent);
+    font-size: 18px;
+  }
+
+  /* Make plan-tab day cells look tappable in current week */
+  .week-card.current .day-mini {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .week-card.current .day-mini:hover {
+    background: rgba(0,200,150,0.1);
+  }
+  .swap-hint {
+    font-size: 10px;
+    color: var(--accent);
+    text-align: center;
+    margin-top: 6px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
   /* Week Ahead card */
   .week-ahead-card {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -1273,6 +1361,16 @@
 
 </div>
 
+<!-- Swap workout modal -->
+<div id="swap-modal" class="modal-backdrop" onclick="if(event.target===this)cancelSwap()">
+  <div class="modal-card">
+    <div class="modal-title" id="swap-modal-title">Move workout</div>
+    <div class="modal-sub" id="swap-modal-sub">Pick a day to swap with</div>
+    <div class="swap-day-grid" id="swap-day-grid"></div>
+    <button class="btn-ghost" onclick="cancelSwap()">Cancel</button>
+  </div>
+</div>
+
 <!-- Bottom nav -->
 <div id="bottom-nav" class="bottom-nav hidden">
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
@@ -1630,6 +1728,77 @@ function submitCheckIn() {
 function cancelCheckIn() {
   checkInForm = { type: null, status: null, rpe: null, note: '' };
   renderHome();
+}
+
+// ════════════════════════════════════════════════════
+// WORKOUT SWAP
+// ════════════════════════════════════════════════════
+let swapState = { fromIdx: null };
+
+function persistPlan() {
+  // Write current plan back to localStorage WITHOUT resetting planStartDate
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : {};
+    payload.plan = plan;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+}
+
+function openSwapModal(dayIdx) {
+  if (!plan || !plan.weeks) return;
+  const wkIdx = getCurrentWeekIndex();
+  const week = plan.weeks[wkIdx];
+  if (!week || !week.days || !week.days[dayIdx]) return;
+
+  swapState.fromIdx = dayIdx;
+  const fromDay = week.days[dayIdx];
+  const dayLabels = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+  document.getElementById('swap-modal-title').textContent =
+    `Move ${dayLabels[dayIdx]}'s ${fromDay.type}`;
+  document.getElementById('swap-modal-sub').textContent =
+    fromDay.miles ? `${fromDay.miles} mi · pick a day to swap with` : 'Pick a day to swap with';
+
+  // Build swap candidate rows (all other days in this week)
+  const grid = document.getElementById('swap-day-grid');
+  grid.innerHTML = week.days.map((d, i) => {
+    if (i === dayIdx) return '';
+    const desc = d.type === 'Rest' ? 'Rest' : `${d.type}${d.miles ? ' · ' + d.miles + ' mi' : ''}`;
+    return `
+      <div class="swap-day-row" onclick="performSwap(${i})">
+        <div class="name">${dayLabels[i].slice(0,3)}</div>
+        <div class="desc">${escape(desc)}</div>
+        <div class="arrow">↔</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('swap-modal').classList.add('open');
+}
+
+function performSwap(toIdx) {
+  if (swapState.fromIdx == null) return;
+  const wkIdx = getCurrentWeekIndex();
+  const week = plan.weeks[wkIdx];
+  if (!week || !week.days) return;
+
+  const a = week.days[swapState.fromIdx];
+  const b = week.days[toIdx];
+  // Swap day-level workout fields, leave the day labels (Mon/Tue) intact
+  const tmp = { type: a.type, miles: a.miles, note: a.note };
+  a.type = b.type; a.miles = b.miles; a.note = b.note;
+  b.type = tmp.type; b.miles = tmp.miles; b.note = tmp.note;
+
+  persistPlan();
+  swapState.fromIdx = null;
+  document.getElementById('swap-modal').classList.remove('open');
+  renderDashboard();
+}
+
+function cancelSwap() {
+  swapState.fromIdx = null;
+  document.getElementById('swap-modal').classList.remove('open');
 }
 
 // ════════════════════════════════════════════════════
@@ -2276,7 +2445,8 @@ function renderPlan() {
       const dayShort = DAYS_FULL[i];
       const hasStrength = getStrengthForDay(dayShort).length > 0;
       const strMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
-      return `<div class="day-mini${isRest ? ' rest' : ''}"><div class="label">${dayLetters[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
+      const onClick = isCurrent ? `onclick="openSwapModal(${i})"` : '';
+      return `<div class="day-mini${isRest ? ' rest' : ''}" ${onClick}><div class="label">${dayLetters[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
     }).join('');
     const strengthPill = totalStrengthSessions > 0
       ? `<span class="week-pill" style="background:rgba(168,85,247,0.2);color:#c4b5fd;">💪 ${totalStrengthSessions}x</span>`
@@ -2297,6 +2467,7 @@ function renderPlan() {
           </div>
         </div>
         <div class="day-mini-grid">${days}</div>
+        ${isCurrent ? '<div class="swap-hint">Tap a day to swap workouts</div>' : ''}
       </div>`;
   }).join('') || '<div class="empty">Plan complete 🎉</div>';
 }
