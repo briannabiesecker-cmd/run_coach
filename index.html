@@ -374,6 +374,123 @@
     line-height: 1.3;
   }
 
+  /* ─── Mileage progression chart (Performance tab) ── */
+  .mileage-prog-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 14px;
+    margin-bottom: 12px;
+  }
+  .mileage-prog-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .mp-stat {
+    text-align: center;
+  }
+  .mp-stat .num {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .mp-stat .num.warn { color: #facc15; }
+  .mp-stat .num.bad  { color: #ef4444; }
+  .mp-stat .label {
+    font-size: 9px;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+  .mileage-prog-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 110px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    position: relative;
+  }
+  .mp-week {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    position: relative;
+    height: 100%;
+    cursor: pointer;
+  }
+  .mp-week-bars {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .mp-bar-planned {
+    width: 100%;
+    border: 1px dashed rgba(255,255,255,0.3);
+    border-radius: 3px 3px 0 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+  }
+  .mp-bar-actual {
+    width: 100%;
+    background: var(--accent);
+    border-radius: 3px 3px 0 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    transition: height 0.4s ease;
+  }
+  .mp-bar-actual.over {
+    background: #facc15;
+  }
+  .mp-week.current .mp-bar-actual,
+  .mp-week.current .mp-bar-planned {
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .mp-week-label {
+    font-size: 8px;
+    color: var(--ink-faint);
+    margin-top: 4px;
+    transform: rotate(-60deg);
+    transform-origin: center;
+    height: 14px;
+    white-space: nowrap;
+  }
+  .mileage-prog-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 18px;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--ink-light);
+  }
+  .mileage-prog-legend .item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mileage-prog-legend .swatch-actual {
+    width: 12px;
+    height: 8px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .mileage-prog-legend .swatch-planned {
+    width: 12px;
+    height: 8px;
+    border: 1px dashed rgba(255,255,255,0.4);
+    border-radius: 2px;
+  }
+
   /* ─── Mileage chart (Plan) ─────────────────────── */
   .chart-card {
     background: var(--bg-elev);
@@ -1990,7 +2107,10 @@
 
     <!-- ─── PERFORMANCE TAB ─── -->
     <div id="tab-performance" class="tab">
-      <div class="section-label">Weekly Review</div>
+      <div class="section-label">Mileage Progression</div>
+      <div id="mileage-chart-section"></div>
+
+      <div class="section-label" style="margin-top:16px;">Weekly Review</div>
       <div id="weekly-review-section"></div>
 
       <div class="section-label" style="margin-top:16px;">Pace Zones</div>
@@ -2063,7 +2183,7 @@
   </button>
   <button class="nav-btn" data-tab="performance" onclick="switchTab('performance')">
     <span class="nav-icon">📊</span>
-    <span class="nav-label">Stats</span>
+    <span class="nav-label">Performance</span>
     <span class="nav-indicator"></span>
   </button>
 </div>
@@ -4306,7 +4426,91 @@ function renderWeeklyReviewSection() {
     </div>`;
 }
 
+function renderMileageProgressionChart() {
+  const el = document.getElementById('mileage-chart-section');
+  if (!el || !plan || !plan.weeks) return;
+
+  const weeks = plan.weeks;
+  const today = todayISO();
+  const currentIdx = getCurrentWeekIndex();
+
+  // Compute actual miles per week from check-ins
+  let totalPlanned = 0;
+  let totalActual = 0;
+  let weeksWithData = 0;
+  let onTrackWeeks = 0;
+
+  const data = weeks.map((w, wkIdx) => {
+    let actual = 0;
+    if (planStartDate && w.days) {
+      w.days.forEach((d, di) => {
+        const date = new Date(planStartDate + 'T00:00:00');
+        date.setDate(date.getDate() + wkIdx * 7 + di);
+        const iso = date.toISOString().slice(0, 10);
+        const ci = checkIns[iso] && checkIns[iso].run;
+        if (ci && ci.status === 'done') {
+          actual += ci.distance || d.miles || 0;
+        }
+      });
+    }
+    const planned = w.totalMiles || 0;
+    if (wkIdx <= currentIdx) {
+      totalPlanned += planned;
+      totalActual += actual;
+      if (actual > 0) weeksWithData++;
+      // "On track" = within 80% of planned
+      if (planned > 0 && actual >= planned * 0.8) onTrackWeeks++;
+    }
+    return { wkNum: w.week, planned, actual, isCurrent: wkIdx === currentIdx, isPast: wkIdx < currentIdx };
+  });
+
+  const maxMi = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
+  const compliance = totalPlanned > 0 ? Math.round((totalActual / totalPlanned) * 100) : 0;
+  const complianceClass = compliance >= 80 ? '' : compliance >= 50 ? 'warn' : 'bad';
+
+  // Bars
+  const bars = data.map((d, i) => {
+    const plannedH = Math.round((d.planned / maxMi) * 95);
+    const actualH = Math.round((d.actual / maxMi) * 95);
+    const overPlanned = d.actual > d.planned;
+    const showLabel = i % 2 === 0 || i === data.length - 1;
+    return `
+      <div class="mp-week${d.isCurrent ? ' current' : ''}" onclick="viewedWeekIdx=${i};switchTab('plan');renderPlan();" title="Wk ${d.wkNum}: ${d.actual.toFixed(1)} of ${d.planned} mi">
+        <div class="mp-week-bars">
+          <div class="mp-bar-planned" style="height:${plannedH}px;"></div>
+          <div class="mp-bar-actual${overPlanned ? ' over' : ''}" style="height:${actualH}px;"></div>
+        </div>
+        ${showLabel ? `<div class="mp-week-label">W${d.wkNum}</div>` : '<div class="mp-week-label"></div>'}
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="mileage-prog-card">
+      <div class="mileage-prog-stats">
+        <div class="mp-stat">
+          <div class="num">${totalActual.toFixed(0)}</div>
+          <div class="label">Actual mi</div>
+        </div>
+        <div class="mp-stat">
+          <div class="num">${totalPlanned.toFixed(0)}</div>
+          <div class="label">Planned mi</div>
+        </div>
+        <div class="mp-stat">
+          <div class="num ${complianceClass}">${compliance}%</div>
+          <div class="label">On track</div>
+        </div>
+      </div>
+      <div class="mileage-prog-chart">${bars}</div>
+      <div class="mileage-prog-legend">
+        <div class="item"><div class="swatch-actual"></div>Actual</div>
+        <div class="item"><div class="swatch-planned"></div>Planned</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderPerformance() {
+  renderMileageProgressionChart();
   renderWeeklyReviewSection();
 
   // Pace zones
