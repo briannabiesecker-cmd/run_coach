@@ -26,6 +26,14 @@
 // Sliding-window rate limiter using CacheService. Returns true if
 // the call is allowed, false if exceeded. Per-identity counter
 // auto-expires after RATE_LIMIT_WINDOW_SEC.
+/**
+ * Sliding-window rate limiter using CacheService. RATE_LIMIT_MAX_CALLS
+ * calls per RATE_LIMIT_WINDOW_SEC seconds per identity. Counters
+ * auto-expire when the window passes.
+ *
+ * @param {string} identity - Stable per-caller identifier (user:name or pc:hash)
+ * @return {boolean} true if the call is allowed, false if exceeded
+ */
 function checkRateLimit(identity) {
   if (!identity) return true; // can't rate limit anonymous — fail open
   var cache = CacheService.getScriptCache();
@@ -41,6 +49,14 @@ function checkRateLimit(identity) {
 // a SHA-256 hash of the passcode so we never use the raw passcode as
 // a cache key (defense in depth — the cache is per-script and
 // shouldn't see secrets).
+/**
+ * Derive a stable rate-limit identity from the request body. Prefers
+ * userName when available; falls back to a 16-char SHA-256 prefix of
+ * the passcode so we never use raw secrets as cache keys.
+ *
+ * @param {Object} body - Parsed request body
+ * @return {string|null} Identity string ('user:name' or 'pc:hex'), or null
+ */
 function rateLimitIdentity(body) {
   if (body && body.userName) return 'user:' + String(body.userName).toLowerCase();
   if (body && body.passcode) {

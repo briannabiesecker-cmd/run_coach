@@ -6,6 +6,14 @@
 // identify it and return structured info (date, distance, location).
 // Frontend shows the result and asks for confirmation before using it.
 
+/**
+ * Identify a race by user-supplied name via Gemini. Returns
+ * structured info (date, distance, location) for frontend confirmation.
+ *
+ * @param {{raceName: string}} params
+ * @return {{success: true, race: {found: boolean, name?: string, date?: string,
+ *           location?: string, distance?: string, confidence?: string}} | {error: string}}
+ */
 function lookupRace(params) {
   var url = buildGeminiUrl();
   if (!url) return { error: 'GEMINI_API_KEY not set in script properties.' };

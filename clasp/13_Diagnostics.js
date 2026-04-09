@@ -17,6 +17,13 @@
 //    folder lookup, sheet creation, write/read round-trip. Used to
 //    diagnose cloud-sync issues without running the full app flow.
 
+/**
+ * Increment today's Gemini call counter in script properties. Called
+ * from fetchGeminiWithRetry on every fetch attempt (each one counts
+ * against the daily quota). Counter key auto-rotates per day.
+ *
+ * @return {number} New counter value after increment
+ */
 function trackGeminiCall() {
   var key = 'gemini_count_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var props = PropertiesService.getScriptProperties();
@@ -25,6 +32,14 @@ function trackGeminiCall() {
   return count;
 }
 
+/**
+ * Public action handler for ?action=quotaUsed. Returns today's Gemini
+ * call count plus the published free-tier limits so the frontend can
+ * show "X / 250 (Y%)" warnings.
+ *
+ * @return {{success: true, date: string, geminiCalls: number,
+ *           freeTierDailyLimit: number, freeTierMinuteLimit: number}}
+ */
 function getQuotaUsed() {
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var key = 'gemini_count_' + today;
@@ -39,6 +54,14 @@ function getQuotaUsed() {
   };
 }
 
+/**
+ * End-to-end cloud sync diagnostic. Run from the Apps Script editor
+ * (Function dropdown → testCloudSync → Run). Verifies folder lookup,
+ * sheet creation, save/load round-trip, and folder placement. Logs
+ * each step with ✅/❌ markers.
+ *
+ * @return {string} Multi-line log output
+ */
 function testCloudSync() {
   var log = [];
   var ok = function(msg) { log.push('✅ ' + msg); Logger.log('✅ ' + msg); };

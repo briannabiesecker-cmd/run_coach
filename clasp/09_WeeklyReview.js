@@ -16,6 +16,22 @@
 // Returns: { success, review: { summary, compliancePct, observations,
 //            recommendation, proposedChanges } }
 
+/**
+ * Generate a weekly review of past execution + propose next-week
+ * adjustments via Gemini. Includes coach memory (recentReviews) and
+ * cumulative stats so the AI can spot patterns across weeks.
+ *
+ * @param {Object} params
+ * @param {Object} params.weekData - The just-completed week (week, phase, focus, totalMiles, days)
+ * @param {Array} params.dayLogs - Per-day log [{day, plannedType, plannedMiles, status, rpe, note, ...}]
+ * @param {Object|null} [params.wellnessAvg] - {sleep, soreness, daysLogged}
+ * @param {Object} [params.raceInfo] - {name, date, distance, goalTime, weeksOut}
+ * @param {Object|null} [params.nextWeek] - Currently planned next week
+ * @param {Array} [params.recentReviews] - Last 2 prior reviews for memory
+ * @param {Object|null} [params.cumulativeStats] - Plan-so-far totals
+ * @param {string} [params.coachingStyle='encouraging']
+ * @return {{success: true, review: Object} | {error: string}}
+ */
 function weeklyReview(params) {
   var url = buildGeminiUrl();
   if (!url) return { error: 'GEMINI_API_KEY not set in script properties.' };

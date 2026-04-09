@@ -21,6 +21,17 @@
 // also call trackGeminiCall() on every fetch attempt to keep the
 // quota counter accurate. See 13_Diagnostics.js for the counter.
 
+/**
+ * POST to Gemini with automatic retry on transient errors.
+ * Retries 503/429/500 up to GEMINI_RETRY_MAX_ATTEMPTS times. 429s
+ * parse the "retry in X.Xs" hint and respect it (capped at
+ * GEMINI_RETRY_MAX_WAIT_MS — anything bigger is the daily quota).
+ * Every attempt counts toward the daily quota counter via trackGeminiCall().
+ *
+ * @param {string} url - Full Gemini generateContent URL with API key
+ * @param {Object} payload - Gemini request body (contents, generationConfig, etc.)
+ * @return {GoogleAppsScript.URL_Fetch.HTTPResponse} The response (caller checks status)
+ */
 function fetchGeminiWithRetry(url, payload) {
   var lastResponse = null;
   for (var attempt = 1; attempt <= GEMINI_RETRY_MAX_ATTEMPTS; attempt++) {
@@ -60,6 +71,12 @@ function fetchGeminiWithRetry(url, payload) {
 // Build the Gemini generateContent URL with the API key from script
 // properties. Returns null if the key isn't set so callers can return
 // a clean error.
+/**
+ * Construct the Gemini generateContent URL with the API key from
+ * script properties.
+ *
+ * @return {string|null} The URL, or null if GEMINI_API_KEY is unset
+ */
 function buildGeminiUrl() {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return null;

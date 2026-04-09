@@ -26,6 +26,13 @@
 // is ~10ms. Drive search fallback (when properties miss) is ~600ms.
 // On cache hit we skip both. On stale-cache (deleted folder) we
 // invalidate and fall through to the slow path.
+/**
+ * Resolve (or create) the RunCoach folder in Drive. Caches the result
+ * in CacheService for 6 hours. Falls through to PropertiesService and
+ * Drive search on cache miss.
+ *
+ * @return {GoogleAppsScript.Drive.Folder} The RunCoach folder
+ */
 function getOrCreateRunCoachFolder() {
   var cache = CacheService.getScriptCache();
   var cachedId = cache.get('runcoach_folder_id');
@@ -60,6 +67,14 @@ function getOrCreateRunCoachFolder() {
 // Per-user sheet lookup with the same cache pattern. The cache key is
 // derived from lowercased user name; values are sheet IDs (strings).
 // Stale-cache recovery handled by catching openById errors.
+/**
+ * Resolve (or create) a per-user sheet inside the RunCoach folder.
+ * The sheet is named "RunCoach - <userName>" and contains a "data" tab.
+ * Cached in CacheService for 1 hour with stale-cache recovery.
+ *
+ * @param {string} userName - The user's display name (case-insensitive lookup)
+ * @return {GoogleAppsScript.Spreadsheet.Sheet} The "data" tab of the user's sheet
+ */
 function getOrCreateUserSheet(userName) {
   var cache = CacheService.getScriptCache();
   var cacheKey = 'user_sheet_' + userName.toLowerCase();
@@ -117,6 +132,14 @@ function getOrCreateUserSheet(userName) {
 // nothing to migrate. When the schema changes, add migration steps here.
 // The function takes a parsed payload, mutates/returns it, and bumps
 // the version. Loaders call this on every read.
+/**
+ * Schema migration entrypoint. Today this is a no-op (we're at v1).
+ * When the payload schema changes, add migration steps here. Loaders
+ * call this on every read so old payloads upgrade transparently.
+ *
+ * @param {Object} parsed - The JSON-parsed cloud payload
+ * @return {Object} Migrated payload (same object, mutated)
+ */
 function migratePayload(parsed) {
   if (!parsed) return parsed;
   var v = parsed.payloadVersion || 0;
@@ -127,6 +150,13 @@ function migratePayload(parsed) {
   return parsed;
 }
 
+/**
+ * Load a user's full payload from their per-user sheet's "data" tab.
+ * Migrates old schema versions automatically via migratePayload().
+ *
+ * @param {{userName: string}} body
+ * @return {{success: true, payload: Object|null, updatedAt?: string} | {error: string}}
+ */
 function loadUserData(body) {
   var userName = (body.userName || '').trim();
   if (!userName) return { error: 'userName is required' };
@@ -146,6 +176,14 @@ function loadUserData(body) {
   }
 }
 
+/**
+ * Save a user's full payload to their per-user sheet. Stamps payloadVersion,
+ * acquires LockService to prevent concurrent-write races, validates against
+ * SHEETS_CELL_LIMIT, writes to row 2 of the data tab.
+ *
+ * @param {{userName: string, payload: Object}} body
+ * @return {{success: true, updatedAt: string} | {error: string}}
+ */
 function saveUserData(body) {
   var userName = (body.userName || '').trim();
   if (!userName) return { error: 'userName is required' };

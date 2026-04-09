@@ -10,6 +10,16 @@
 // buildUserPrompt — assembles the per-call runner profile (race,
 // mileage, longest run, days/week, injuries, strength schedule).
 
+/**
+ * Build the Gemini system prompt with the runner's targeted template.
+ * Only injects ONE template cell (race × tier) and the workouts gated
+ * for that tier — saves ~50% of tokens vs. sending all 12 cells.
+ *
+ * @param {'encouraging'|'data-driven'|'tough-love'} style - Coaching tone
+ * @param {'novice'|'intermediate'|'advanced'} tier - Inferred runner tier
+ * @param {'5k'|'10k'|'half'|'marathon'} distanceKey - Race distance template key
+ * @return {string} Full system prompt text
+ */
 function buildSystemPrompt(style, tier, distanceKey) {
   var styleMap = {
     'encouraging': 'TONE: Warm and supportive. Celebrate progress, frame challenges as opportunities. Avoid being saccharine.',
@@ -163,6 +173,24 @@ function buildSystemPrompt(style, tier, distanceKey) {
   ].join('\n');
 }
 
+/**
+ * Build the per-call user prompt block with the runner's profile.
+ * Tier inference rules and template selection are NOT in here — those
+ * happen server-side and are baked into buildSystemPrompt.
+ *
+ * @param {Object} p - Runner profile
+ * @param {string} p.distance - Race distance label
+ * @param {string} p.raceDate - YYYY-MM-DD
+ * @param {string} [p.mileage] - Current weekly miles
+ * @param {string} [p.longestRecentRun] - Longest recent run mi
+ * @param {string} [p.goal] - Goal finish time
+ * @param {string} [p.daysPerWeek] - Days/week available (HARD constraint)
+ * @param {string} [p.longRunDay] - Preferred long run day
+ * @param {string} [p.injuryNotes] - Free text injury/limitation notes
+ * @param {number} [p.screenshotCount] - Number of attached screenshots
+ * @param {Array<{day:string,time:string,label:string}>} [p.strengthSchedule]
+ * @return {string} Full user prompt text
+ */
 function buildUserPrompt(p) {
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var lines = [

@@ -6,6 +6,16 @@
 // extracts distance/duration/HR/pace/elevation. Used to auto-fill the
 // check-in form so users don't manually type numbers from their watch.
 
+/**
+ * Extract running activity data from a Strava screenshot via Gemini Vision.
+ * Used to auto-fill the check-in form so users don't manually type
+ * numbers from their watch.
+ *
+ * @param {{image: string}} params - image is base64-encoded PNG
+ * @return {{success: true, data: {distance: number|null, duration: string|null,
+ *           avgHR: number|null, elevation: number|null, type: string,
+ *           confidence: string}} | {error: string}}
+ */
 function parseRunScreenshot(params) {
   var url = buildGeminiUrl();
   if (!url) return { error: 'GEMINI_API_KEY not set in script properties.' };

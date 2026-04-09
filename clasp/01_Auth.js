@@ -43,6 +43,13 @@ function _constantTimeEquals(a, b) {
   return result === 0;
 }
 
+/**
+ * Validate the supplied passcode against the stored hash.
+ * One-time migration: hashes plaintext APP_PASSCODE on first call.
+ *
+ * @param {string} supplied - The passcode the user typed
+ * @return {{ok: boolean, error?: string}} ok=true on match, error msg on fail
+ */
 function checkPasscode(supplied) {
   var props = PropertiesService.getScriptProperties();
   var stored = props.getProperty('APP_PASSCODE');

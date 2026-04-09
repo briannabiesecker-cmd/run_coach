@@ -66,6 +66,17 @@ function getOrCreateBackupsTab() {
 
 // Append a single activity row. Best-effort: failures are swallowed
 // so logging never breaks a real action. Called from doPost wrapper.
+/**
+ * Append a row to the activity log. Best-effort — failures are
+ * swallowed so logging never breaks a real action. Metadata only,
+ * no payload contents or PII.
+ *
+ * @param {string} action - Action name (e.g. 'coach', 'saveUserData')
+ * @param {string} identity - Rate-limit identity (user:name or pc:hash)
+ * @param {'ok'|'error'|'auth_fail'|'rate_limited'} status
+ * @param {number} latencyMs - Wall-clock time the action took
+ * @param {string} [note] - Optional context (error message, etc.)
+ */
 function logActivity(action, identity, status, latencyMs, note) {
   try {
     var sheet = getOrCreateActivityTab();
@@ -91,6 +102,13 @@ function logActivity(action, identity, status, latencyMs, note) {
 // snapshot row 2 of the data tab, and append to the backups tab.
 // Then prune backups older than META_BACKUP_RETENTION_DAYS and
 // activity older than META_ACTIVITY_MAX_ROWS.
+/**
+ * Snapshot every user's data tab to the backups tab. Triggered nightly
+ * by installNightlyBackupTrigger(). Iterates USER_SHEET_* script
+ * properties; one row per user per day. Prunes >30 days afterward.
+ *
+ * @return {string} Status message (also Logger.log'd)
+ */
 function nightlyBackup() {
   var props = PropertiesService.getScriptProperties();
   var allProps = props.getProperties();
@@ -171,6 +189,13 @@ function pruneOldActivity() {
 // runs daily at 03:00 in the script's timezone. Run this from the
 // Apps Script editor once after deploying. Idempotent — checks for
 // an existing trigger first.
+/**
+ * One-time setup: install the time-based trigger so nightlyBackup
+ * runs daily at 03:00 in the script's timezone. Run from the Apps
+ * Script editor once after deploying. Idempotent.
+ *
+ * @return {string} 'Installed' or 'Already installed'
+ */
 function installNightlyBackupTrigger() {
   var existing = ScriptApp.getProjectTriggers();
   var alreadyInstalled = existing.some(function(t) {
@@ -190,6 +215,15 @@ function installNightlyBackupTrigger() {
 // Helper for restoring a user's plan from a backup row. Run from the
 // editor: restoreUserFromBackup('brianna', '2026-04-09') copies that
 // day's backed-up payload back into the user's data tab.
+/**
+ * Restore a user's plan from a backup row. Run from the Apps Script
+ * editor when a user accidentally trashes their data. Reads the
+ * payload from the backups tab and writes it back via saveUserData.
+ *
+ * @param {string} userName - The user to restore (case-insensitive)
+ * @param {string} dateISO - YYYY-MM-DD of the backup to restore from
+ * @return {string} Status message
+ */
 function restoreUserFromBackup(userName, dateISO) {
   var backupsSheet = getOrCreateBackupsTab();
   var lastRow = backupsSheet.getLastRow();

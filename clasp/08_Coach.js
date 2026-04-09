@@ -18,6 +18,26 @@
 // Tier is computed server-side via inferTier() so we send only the
 // relevant template + workout library, not all 12 cells.
 
+/**
+ * Generate a complete training plan via Gemini. Computes runner tier
+ * server-side, builds a targeted prompt (only 1 template cell, not 12),
+ * sends to Gemini with screenshots if provided, validates the response
+ * structure before returning.
+ *
+ * @param {Object} params
+ * @param {string} params.raceDate - "YYYY-MM-DD"
+ * @param {string} params.raceDistance - "5K"|"10K"|"Half Marathon"|"Marathon"
+ * @param {string} [params.weeklyMileage] - PRIMARY tier signal
+ * @param {string} [params.longestRecentRun] - Secondary tier signal
+ * @param {string} [params.goalTime] - Target finish time (NOT a tier promoter)
+ * @param {string} [params.daysPerWeek] - HARD constraint, 3-7
+ * @param {string} [params.longRunDay] - Preferred long run day
+ * @param {string} [params.injuryNotes] - Free text limitations
+ * @param {string} [params.coachingStyle='encouraging']
+ * @param {Array<{day:string,time:string,label:string}>} [params.strengthSchedule]
+ * @param {string[]} [params.screenshots] - Base64-encoded PNGs
+ * @return {{success: true, result: Object} | {error: string}}
+ */
 function coach(params) {
   var url = buildGeminiUrl();
   if (!url) return { error: 'GEMINI_API_KEY not set in script properties.' };

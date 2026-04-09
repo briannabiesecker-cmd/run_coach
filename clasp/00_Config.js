@@ -40,4 +40,4 @@ var RATE_LIMIT_MAX_CALLS  = 60;
 
 // Diagnostic version string returned by ?action=ping. Bump manually when
 // shipping a release worth labeling.
-var BACKEND_VERSION = 'v3-tier2-observability';
+var BACKEND_VERSION = 'v3-tier2-complete';
