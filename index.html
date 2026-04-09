@@ -594,6 +594,71 @@
     margin-top: 2px;
   }
 
+  /* Wellness card */
+  .wellness-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .wellness-card.logged {
+    background: rgba(59,130,246,0.06);
+    border-color: rgba(59,130,246,0.3);
+    padding: 10px 14px;
+  }
+  .wellness-prompt {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .wellness-sub {
+    font-size: 12px;
+    color: var(--ink-light);
+    margin-bottom: 12px;
+  }
+  .wellness-row-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .wellness-row-label .scale-hint {
+    font-weight: 500;
+    color: var(--ink-faint);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .wellness-summary {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .wellness-summary .item {
+    color: var(--ink);
+  }
+  .wellness-summary .item .num {
+    font-weight: 800;
+    color: #93c5fd;
+  }
+  .wellness-summary .edit-link {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--ink-light);
+    font-family: inherit;
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   /* Check-in cards */
   .checkin-card {
     background: var(--bg-elev);
@@ -1035,6 +1100,8 @@
 
     <!-- ─── HOME TAB ─── -->
     <div id="tab-home" class="tab active">
+      <div id="wellness-section"></div>
+
       <!-- Hero card with today's workout -->
       <div class="hero" id="hero-card">
         <div class="hero-tag" id="hero-tag">Loading</div>
@@ -1161,6 +1228,7 @@ let strengthSchedule = [];// [{ day: "Wed", time: "08:00", label: "Lower body" }
 let strengthDraft = [];   // working copy while editing
 let prevView = 'dashboard'; // for cancel-strength-edit return path
 let checkIns = {};        // { "YYYY-MM-DD": { run: {status,rpe,note}, strength: {status,rpe,note} } }
+let wellness = {};        // { "YYYY-MM-DD": { sleep: 8, soreness: 3, loggedAt } }
 
 const DAYS_FULL = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const STATUS_LABELS = { done: '✓ Done', skipped: '✗ Skipped', modified: '⚙ Modified' };
@@ -1371,7 +1439,8 @@ function savePlan(p) {
     planStartDate: todayISO(),
     savedAt: new Date().toISOString(),
     strengthSchedule: strengthSchedule,
-    checkIns: checkIns
+    checkIns: checkIns,
+    wellness: wellness
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   plan = p;
@@ -1387,6 +1456,7 @@ function loadPlan() {
     planStartDate = data.planStartDate;
     strengthSchedule = data.strengthSchedule || [];
     checkIns = data.checkIns || {};
+    wellness = data.wellness || {};
     return true;
   } catch(e) { return false; }
 }
@@ -1456,6 +1526,55 @@ function cancelCheckIn() {
   renderHome();
 }
 
+// ════════════════════════════════════════════════════
+// WELLNESS
+// ════════════════════════════════════════════════════
+let wellnessForm = { open: false, sleep: null, soreness: null };
+
+function getWellness(dateISO) {
+  return wellness[dateISO] || null;
+}
+
+function saveWellness(dateISO, data) {
+  wellness[dateISO] = data;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : { plan, planStartDate, strengthSchedule, checkIns };
+    payload.wellness = wellness;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+}
+
+function openWellnessForm() {
+  const existing = getWellness(todayISO());
+  wellnessForm = {
+    open: true,
+    sleep: existing ? existing.sleep : null,
+    soreness: existing ? existing.soreness : null
+  };
+  renderHome();
+}
+
+function selectSleep(n)    { wellnessForm.sleep = n; renderHome(); }
+function selectSoreness(n) { wellnessForm.soreness = n; renderHome(); }
+
+function submitWellness() {
+  if (wellnessForm.sleep == null || wellnessForm.soreness == null) return;
+  saveWellness(todayISO(), {
+    sleep: wellnessForm.sleep,
+    soreness: wellnessForm.soreness,
+    loggedAt: new Date().toISOString()
+  });
+  wellnessForm = { open: false, sleep: null, soreness: null };
+  renderHome();
+}
+
+function cancelWellness() {
+  wellnessForm = { open: false, sleep: null, soreness: null };
+  renderHome();
+}
+
 function resetPlan() {
   if (!confirm('Start a new plan? This will erase your current plan, strength schedule, and check-ins.')) return;
   localStorage.removeItem(STORAGE_KEY);
@@ -1463,6 +1582,7 @@ function resetPlan() {
   planStartDate = null;
   strengthSchedule = [];
   checkIns = {};
+  wellness = {};
   uploadedFiles = [];
   confirmedRace = null;
   document.getElementById('file-list').innerHTML = '';
@@ -1675,6 +1795,56 @@ function updateStatusPill() {
   document.getElementById('status-pill').textContent = `Wk ${wkNum}${phase ? ' · ' + phase : ''}`;
 }
 
+// ─── WELLNESS CARD ───
+function renderWellnessCard() {
+  const today = todayISO();
+  const existing = getWellness(today);
+  const isOpen = wellnessForm.open;
+
+  // Logged + collapsed
+  if (existing && !isOpen) {
+    return `
+      <div class="wellness-card logged">
+        <div class="wellness-summary">
+          <span class="item">💤 <span class="num">${existing.sleep}/10</span> sleep</span>
+          <span class="item">🦵 <span class="num">${existing.soreness}/10</span> soreness</span>
+          <button class="edit-link" onclick="openWellnessForm()">Edit</button>
+        </div>
+      </div>`;
+  }
+
+  // Not yet logged
+  if (!isOpen) {
+    return `
+      <div class="wellness-card">
+        <div class="wellness-prompt">How are you feeling today?</div>
+        <div class="wellness-sub">A 10-second check-in helps the app coach you better.</div>
+        <button class="checkin-save" onclick="openWellnessForm()">Log wellness</button>
+      </div>`;
+  }
+
+  // Open form
+  const sleepDots = [];
+  for (let i = 1; i <= 10; i++) {
+    sleepDots.push(`<div class="rpe-dot ${wellnessForm.sleep === i ? 'active' : ''}" onclick="selectSleep(${i})">${i}</div>`);
+  }
+  const soreDots = [];
+  for (let i = 1; i <= 10; i++) {
+    soreDots.push(`<div class="rpe-dot ${wellnessForm.soreness === i ? 'active' : ''}" onclick="selectSoreness(${i})">${i}</div>`);
+  }
+
+  return `
+    <div class="wellness-card">
+      <div class="wellness-prompt">How are you feeling today?</div>
+      <div class="wellness-row-label">💤 Sleep <span class="scale-hint">1 = terrible · 10 = great</span></div>
+      <div class="rpe-row">${sleepDots.join('')}</div>
+      <div class="wellness-row-label">🦵 Soreness <span class="scale-hint">1 = none · 10 = very sore</span></div>
+      <div class="rpe-row">${soreDots.join('')}</div>
+      <button class="checkin-save" onclick="submitWellness()" ${(wellnessForm.sleep == null || wellnessForm.soreness == null) ? 'disabled' : ''}>Save</button>
+      <button class="checkin-edit-link" style="display:block;margin:8px auto 0;" onclick="cancelWellness()">Cancel</button>
+    </div>`;
+}
+
 // ─── CHECK-IN CARD ───
 // type: 'run' | 'strength'
 // summary: short text describing today's workout
@@ -1786,6 +1956,9 @@ function renderHome() {
       stripEl.appendChild(cell);
     });
   }
+
+  // Wellness section (always at top)
+  document.getElementById('wellness-section').innerHTML = renderWellnessCard();
 
   // Run check-in section (only if today has a non-Rest run)
   const runCheckInEl = document.getElementById('run-checkin-section');
