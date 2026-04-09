@@ -10,6 +10,34 @@
 
 var GEMINI_MODEL = 'gemini-2.5-flash';
 
+// Fetch Gemini with automatic retry on transient infrastructure errors.
+// Gemini regularly returns 503 ("UNAVAILABLE - high demand"), 429
+// (rate limit), and occasionally 500 — these are not bugs in our code,
+// just Google's free tier under load. We retry up to 3 times with
+// exponential backoff (2s, 4s, 8s) before surfacing the error.
+function fetchGeminiWithRetry(url, payload) {
+  var maxAttempts = 3;
+  var lastResponse = null;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    var response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = response.getResponseCode();
+    if (code === 200) return response;
+    lastResponse = response;
+    // Retry only on transient infrastructure errors
+    if (code !== 503 && code !== 429 && code !== 500) return response;
+    if (attempt < maxAttempts) {
+      // Exponential backoff: 2s, 4s, 8s
+      Utilities.sleep(Math.pow(2, attempt) * 1000);
+    }
+  }
+  return lastResponse;
+}
+
 // ──────────────────────────────────────────────────
 // Auth: shared passcode required for all non-public actions.
 // Set APP_PASSCODE in Project Settings → Script Properties.
@@ -297,12 +325,7 @@ function coach(params) {
   };
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
-  var response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
+  var response = fetchGeminiWithRetry(url, payload);
 
   var code = response.getResponseCode();
   if (code !== 200) {
@@ -390,12 +413,7 @@ function lookupRace(params) {
   };
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
-  var response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
+  var response = fetchGeminiWithRetry(url, payload);
 
   if (response.getResponseCode() !== 200) {
     return { error: 'Lookup failed: ' + response.getContentText().slice(0, 300) };
@@ -463,12 +481,7 @@ function parseRunScreenshot(params) {
   };
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
-  var response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
+  var response = fetchGeminiWithRetry(url, payload);
 
   if (response.getResponseCode() !== 200) {
     return { error: 'Parse failed: ' + response.getContentText().slice(0, 300) };
@@ -667,12 +680,7 @@ function weeklyReview(params) {
   };
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + apiKey;
-  var response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
+  var response = fetchGeminiWithRetry(url, payload);
 
   if (response.getResponseCode() !== 200) {
     return { error: 'Review failed: ' + response.getContentText().slice(0, 300) };
