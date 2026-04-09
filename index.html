@@ -4361,6 +4361,56 @@ function closeEditWeekMenu() {
   document.getElementById('edit-week-modal').classList.remove('open');
 }
 
+// ─── Phase explainer popover (Bundle B) ───
+const PHASE_DEFS = {
+  'Base': {
+    icon: '🟢',
+    body: 'Building your aerobic foundation with mostly easy running. The goal is durability — accumulating volume so the harder phases later have something to build on. Pace doesn\'t matter; time on feet does. Lasts roughly 30-40% of the plan.'
+  },
+  'Build': {
+    icon: '🔵',
+    body: 'Intensity is being introduced gradually. You\'ll start seeing tempo runs and intervals appear. The "hard/easy" rhythm becomes important — recovery between quality sessions is non-negotiable. The point is teaching your body to clear lactate and run efficiently at faster paces.'
+  },
+  'Peak': {
+    icon: '🟠',
+    body: 'Race-specific work. Quality sessions get longer and more demanding, mileage hits its highest weeks, and long runs include race-pace blocks. This is the hardest stretch of the plan — trust it. By the end, you\'ve done the work the race will demand.'
+  },
+  'Taper': {
+    icon: '🟣',
+    body: 'Volume drops sharply but intensity stays. Your fitness is already banked — these final weeks let your legs absorb the training and arrive fresh on race day. Don\'t cram. Less is more. The temptation to do "one more long run" is the most common pre-race mistake.'
+  }
+};
+function openPhaseExplainer(phase) {
+  const def = PHASE_DEFS[phase];
+  if (!def) return;
+  // Inject the popover into the body each time so we don't carry stale state
+  closePhaseExplainer();
+  const div = document.createElement('div');
+  div.id = 'phase-popover-instance';
+  div.className = 'phase-popover';
+  div.innerHTML = `
+    <div class="head">
+      <span style="font-size:22px;">${def.icon}</span>
+      <span class="name">${escape(phase)} phase</span>
+    </div>
+    <div class="body">${escape(def.body)}</div>
+    <button class="close-btn" onclick="closePhaseExplainer()">Got it</button>
+  `;
+  document.body.appendChild(div);
+  // Add a backdrop click-to-close
+  const backdrop = document.createElement('div');
+  backdrop.id = 'phase-popover-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;';
+  backdrop.onclick = closePhaseExplainer;
+  document.body.appendChild(backdrop);
+}
+function closePhaseExplainer() {
+  const p = document.getElementById('phase-popover-instance');
+  const b = document.getElementById('phase-popover-backdrop');
+  if (p) p.remove();
+  if (b) b.remove();
+}
+
 function deleteLogEntry(date, type) {
   if (!confirm(`Delete this ${type} entry from ${date}?`)) return;
   if (!checkIns[date] || !checkIns[date][type]) return;
@@ -5456,6 +5506,24 @@ function renderCheckInCard(type, summary) {
     </div>`;
 }
 
+// Find the index of the long-run day in a week. Prefers an explicit
+// type === 'Long' day; falls back to the highest-mileage non-rest day.
+// Returns -1 if no candidate exists.
+function findLongRunDayIdx(week) {
+  if (!week || !week.days) return -1;
+  let idx = -1;
+  let maxMi = 0;
+  week.days.forEach((d, i) => {
+    if (d.type === 'Long' && (d.miles || 0) > maxMi) { maxMi = d.miles; idx = i; }
+  });
+  if (idx === -1) {
+    week.days.forEach((d, i) => {
+      if ((d.miles || 0) > maxMi) { maxMi = d.miles; idx = i; }
+    });
+  }
+  return idx;
+}
+
 // Render the race-countdown hero into any element id (used by Home + Plan tabs)
 function renderRaceCountdownInto(elId) {
   const raceEl = document.getElementById(elId);
@@ -5637,8 +5705,11 @@ function renderHome() {
   const stripEl = document.getElementById('week-strip-section');
   if (stripEl && week && week.days) {
     const dayLetters = ['M','T','W','T','F','S','S'];
+    // Identify the long run day so we can highlight it visually
+    const stripLongRunIdx = findLongRunDayIdx(week);
     const cells = week.days.map((d, i) => {
       const isToday = i === dayIdx;
+      const isLong = i === stripLongRunIdx && d.type !== 'Rest' && d.miles;
       let hasActualRun = false;
       if (planStartDate) {
         const dt = new Date(planStartDate + 'T00:00:00');
@@ -5647,7 +5718,9 @@ function renderHome() {
         const ci = checkIns[iso] && checkIns[iso].run;
         if (ci && ci.status === 'done') hasActualRun = true;
       }
-      const cellClass = 'day-cell' + (isToday ? ' today' : (hasActualRun ? ' done' : ''));
+      const stateClass = isToday ? ' today' : (hasActualRun ? ' done' : '');
+      const longClass = isLong ? ' long-run' : '';
+      const cellClass = 'day-cell' + stateClass + longClass;
       const icon = TYPE_ICONS[d.type] || '—';
       const dayShort = DAYS_FULL[i];
       const hasStrength = getStrengthForDay(dayShort).length > 0;
@@ -5783,35 +5856,23 @@ function renderPlan() {
   const phaseColor = getPhaseColor(week.phase);
   const totalStrengthSessions = (strengthSchedule || []).length;
   const isCurrentWeek = wkIdx === getCurrentWeekIndex();
+  // Find the long-run day (shared helper) and today's index for highlighting
+  const longRunIdx = findLongRunDayIdx(week);
+  const todayDayIdx = getCurrentDayIndex();
   const days = (week.days || []).map((d, i) => {
     const isRest = d.type === 'Rest' || !d.miles;
     const dayShort = DAYS_FULL[i];
     const hasStrength = getStrengthForDay(dayShort).length > 0;
     const strMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
     const onClick = isCurrentWeek ? `onclick="openSwapModal(${i})"` : '';
-    return `<div class="day-mini${isRest ? ' rest' : ''}" ${onClick}><div class="label">${dayLabels[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
+    const isToday = isCurrentWeek && i === todayDayIdx;
+    const isLong = i === longRunIdx && !isRest;
+    const miniClasses = ['day-mini', isRest && 'rest', isToday && 'today', isLong && 'long-run'].filter(Boolean).join(' ');
+    return `<div class="${miniClasses}" ${onClick}><div class="label">${dayLabels[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
   }).join('');
   const strengthPill = totalStrengthSessions > 0
     ? `<span class="week-pill" style="background:rgba(168,85,247,0.2);color:#c4b5fd;">💪 ${totalStrengthSessions}x</span>`
     : '';
-  // Find the long-run day (highest miles in the week, must be type Long if present)
-  let longRunIdx = -1;
-  let longRunMiles = 0;
-  (week.days || []).forEach((d, i) => {
-    if (d.type === 'Long' && (d.miles || 0) > longRunMiles) {
-      longRunMiles = d.miles;
-      longRunIdx = i;
-    }
-  });
-  // Fallback: if no Long type, mark the highest-miles day on a non-easy-only week
-  if (longRunIdx === -1) {
-    (week.days || []).forEach((d, i) => {
-      if ((d.miles || 0) > longRunMiles) { longRunMiles = d.miles; longRunIdx = i; }
-    });
-  }
-
-  // Build the day-by-day workout list (Runna-style)
-  const todayDayIdx = getCurrentDayIndex();
   const workoutListRows = (week.days || []).map((d, i) => {
     const isRest = d.type === 'Rest' || !d.miles;
     const isToday = isCurrentWeek && i === todayDayIdx;
@@ -5910,7 +5971,7 @@ function renderPlan() {
     <div class="week-card${isCurrentWeek ? ' current' : ''}">
       <div class="week-card-head">
         <div>
-          <span class="week-pill" style="background:${phaseColor}33;color:${phaseColor}">${escape(week.phase || '')}</span>
+          <span class="week-pill tappable" style="background:${phaseColor}33;color:${phaseColor}" onclick="openPhaseExplainer('${escape(week.phase || '')}')">${escape(week.phase || '')} <span style="opacity:0.65;font-size:9px;">ⓘ</span></span>
           ${strengthPill}
           ${isCurrentWeek ? '<span class="week-pill now">NOW</span>' : ''}
           <div class="week-focus">${escape(week.focus || '')}</div>
