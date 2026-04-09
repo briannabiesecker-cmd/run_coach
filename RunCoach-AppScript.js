@@ -98,6 +98,8 @@ function coach(params) {
   var weeklyMileage = params.weeklyMileage || '';
   var goalTime      = params.goalTime || '';
   var coachingStyle = params.coachingStyle || 'encouraging';
+  // strengthSchedule arrives as an array of { day, time, label }
+  var strengthSchedule = Array.isArray(params.strengthSchedule) ? params.strengthSchedule : [];
   // screenshots may arrive as an array (POST body) or comma-separated string (JSONP GET)
   var screenshots;
   if (Array.isArray(params.screenshots)) {
@@ -112,7 +114,7 @@ function coach(params) {
 
   // Build prompt
   var systemPrompt = buildSystemPrompt(coachingStyle);
-  var userPrompt   = buildUserPrompt(raceDate, raceDistance, weeklyMileage, goalTime, screenshots.length);
+  var userPrompt   = buildUserPrompt(raceDate, raceDistance, weeklyMileage, goalTime, screenshots.length, strengthSchedule);
 
   // Build Gemini parts: text + inline images
   var parts = [{ text: userPrompt }];
@@ -252,6 +254,14 @@ function buildSystemPrompt(style) {
     '5. WORKOUT TYPES: Easy, Long, Tempo (comfortably hard), Intervals (faster than 5K pace, short reps), Rest, Cross-train.',
     '6. TAPER: 2-3 weeks before marathon, reduce volume but maintain intensity. Race week is very light.',
     '7. BASE BUILDING: If user has many weeks before race, start with a base phase to build mileage gradually before the formal plan.',
+    '8. STRENGTH SCHEDULING (when user has fixed strength days):',
+    '   - The runner has FIXED strength days each week — you must work runs around these, not change the strength days.',
+    '   - DO NOT schedule the long run on a strength day OR the day after a strength day. Recovery from strength leaves the legs heavy.',
+    '   - DO NOT schedule intervals or tempo on a strength day if the strength is heavy lower body.',
+    '   - PREFER easy/short runs on strength days (or rest). The combo is fine when running is light.',
+    '   - The day BEFORE a long run should be rest or easy — not strength.',
+    '   - If both strength days are mid-week, place the long run on a weekend day at least 1 day removed from strength.',
+    '   - When in doubt, give Rest on a strength day rather than fight for both.',
     '',
     'INFLUENCES: Hal Higdon (predictable structure), Pfitzinger (marathon-pace work), Daniels (pace zones), Runna (adaptive feedback).',
     '',
@@ -310,7 +320,7 @@ function buildSystemPrompt(style) {
   ].join('\n');
 }
 
-function buildUserPrompt(raceDate, distance, mileage, goal, screenshotCount) {
+function buildUserPrompt(raceDate, distance, mileage, goal, screenshotCount, strengthSchedule) {
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var lines = [
     'Today is ' + today + '.',
@@ -319,10 +329,23 @@ function buildUserPrompt(raceDate, distance, mileage, goal, screenshotCount) {
     goal ? 'Goal finish time: ' + goal + '.' : 'No goal time given — recommend a realistic target.',
     screenshotCount > 0
       ? 'I have attached ' + screenshotCount + ' Strava screenshot(s) of recent runs. Use them to assess my current fitness, pace, and patterns.'
-      : 'No run data attached.',
-    '',
-    'Build a complete training plan from today through race week. Include a base-building phase if there is enough time.',
-    'Return only the JSON. Be concise — focus on structure, not motivational text.'
+      : 'No run data attached.'
   ];
-  return lines.filter(function(l) { return l.length > 0; }).join('\n');
+
+  // Strength schedule constraint
+  if (strengthSchedule && strengthSchedule.length) {
+    lines.push('');
+    lines.push('STRENGTH CONSTRAINT — these are FIXED weekly strength sessions I cannot change. Build the running plan around them:');
+    strengthSchedule.forEach(function(s) {
+      lines.push('  - ' + s.day + (s.time ? ' at ' + s.time : '') + (s.label ? ' (' + s.label + ')' : ''));
+    });
+    lines.push('Apply the strength scheduling rules from the system prompt: no long run on or after strength days, prefer easy/rest on strength days, etc.');
+  } else {
+    lines.push('No strength schedule — you can place runs on any day.');
+  }
+
+  lines.push('');
+  lines.push('Build a complete training plan from today through race week. Include a base-building phase if there is enough time.');
+  lines.push('Return only the JSON. Be concise — focus on structure, not motivational text.');
+  return lines.filter(function(l) { return l.length > 0 || true; }).join('\n');
 }
