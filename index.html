@@ -2825,6 +2825,13 @@
             <div class="settings-desc">Manage your weekly strength sessions</div>
           </div>
         </button>
+        <button class="settings-item" onclick="closeSettingsMenu();promptSetUserName();">
+          <span class="settings-icon">👋</span>
+          <div class="settings-text">
+            <div class="settings-label">Set your name (cloud sync)</div>
+            <div class="settings-desc">Required for plan/log to sync to Google Sheets</div>
+          </div>
+        </button>
         <button class="settings-item" onclick="closeSettingsMenu();resetPlan();">
           <span class="settings-icon">🔄</span>
           <div class="settings-text">
@@ -3516,6 +3523,22 @@ function submitName() {
   // After setting the name, fetch this user's data from the cloud and
   // route them to the right next view (dashboard if plan exists, setup if not)
   hydrateFromCloudAndRoute();
+}
+
+// Settings menu entry — lets a user set or change their cloud-sync name
+// without losing their existing plan/log. Triggers an immediate push so
+// the sheet appears right away.
+function promptSetUserName() {
+  const current = getUserName() || '';
+  const next = prompt('Your name for cloud sync (used as the key in Google Sheets):', current);
+  if (next == null) return; // user cancelled
+  const trimmed = next.trim();
+  if (!trimmed) { alert('Name cannot be empty.'); return; }
+  if (trimmed.length > 30) { alert('Keep it under 30 characters.'); return; }
+  setUserName(trimmed);
+  // Fire an immediate push so the sheet gets created right now with
+  // whatever local state exists.
+  pushToCloud().then(() => alert('Saved. Check the RunCoach folder in Drive for your sheet.'));
 }
 
 function showNameAlert(msg) {
