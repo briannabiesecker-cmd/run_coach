@@ -552,6 +552,50 @@
     border: 1px solid var(--border);
   }
 
+  /* Backfill preview */
+  .backfill-rows {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-elev-2);
+  }
+  .backfill-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    font-size: 12px;
+  }
+  .backfill-row:last-child { border-bottom: none; }
+  .backfill-row.skipped { opacity: 0.4; }
+  .backfill-row .date {
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .backfill-row .name {
+    color: var(--ink-light);
+    font-size: 11px;
+  }
+  .backfill-row .stats {
+    color: var(--ink);
+    font-size: 11px;
+    text-align: right;
+  }
+  .backfill-row .skipped-tag {
+    font-size: 9px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
+  .backfill-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+  }
+
   /* Strength rows */
   .strength-rows { display: flex; flex-direction: column; gap: 6px; }
   .strength-row {
@@ -1522,6 +1566,66 @@
     <button class="btn-primary" id="submit-btn" onclick="submitForm()">Build my plan</button>
   </div>
 
+  <!-- ═════════ BACKFILL VIEW ═════════ -->
+  <div id="view-backfill" class="view hidden">
+    <div class="setup-hero">
+      <div class="setup-icon">📥</div>
+      <div class="setup-title">Backfill from Strava</div>
+      <div class="setup-sub">Import past runs from your Strava export</div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div style="font-size:13px;color:var(--ink-mid);line-height:1.6;">
+        <p style="margin-bottom:8px;"><strong style="color:var(--ink);">How to get the file:</strong></p>
+        <ol style="padding-left:18px;color:var(--ink-mid);font-size:12px;line-height:1.7;">
+          <li>Go to <a href="https://www.strava.com/athlete/delete_your_account" target="_blank" style="color:var(--accent);">strava.com/athlete/delete_your_account</a></li>
+          <li>Scroll to "Download Request" → click <strong>Request Your Archive</strong></li>
+          <li>Strava emails you a ZIP within a few hours</li>
+          <li>Unzip → find <code style="background:var(--bg-elev-2);padding:1px 6px;border-radius:4px;">activities.csv</code> at the root</li>
+          <li>Upload it below</li>
+        </ol>
+      </div>
+    </div>
+
+    <div id="backfill-alert" class="alert error hidden"></div>
+
+    <div class="field">
+      <label class="file-drop" for="backfill-csv-input">
+        <div class="icon">📄</div>
+        <div class="label">Tap to choose activities.csv</div>
+        <input type="file" id="backfill-csv-input" accept=".csv,text/csv" onchange="handleBackfillCSV(this)" />
+      </label>
+    </div>
+
+    <div id="backfill-preview" class="hidden">
+      <div class="card" style="padding:14px 16px;margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--ink-light);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Preview</div>
+        <div id="backfill-summary" style="font-size:14px;color:var(--ink);margin-top:6px;line-height:1.6;"></div>
+      </div>
+
+      <div class="field">
+        <label>Date range</label>
+        <select id="backfill-range" onchange="renderBackfillPreview()">
+          <option value="60">Last 60 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+          <option value="all">All time</option>
+        </select>
+      </div>
+
+      <div id="backfill-rows" class="backfill-rows"></div>
+
+      <button class="btn-primary" id="backfill-import-btn" onclick="confirmBackfillImport()" style="margin-top:14px;">Import runs</button>
+      <button class="btn-ghost" onclick="cancelBackfill()">Cancel</button>
+    </div>
+
+    <div id="backfill-empty" class="hidden">
+      <button class="btn-ghost" onclick="cancelBackfill()" style="margin-top:14px;">Cancel</button>
+    </div>
+  </div>
+
   <!-- ═════════ STRENGTH EDIT VIEW ═════════ -->
   <div id="view-strength" class="view hidden">
     <div class="setup-hero">
@@ -1573,7 +1677,8 @@
       <div class="section-label">Quick Stats</div>
       <div class="stat-grid" id="quick-stats"></div>
 
-      <button class="btn-ghost" onclick="openStrengthEdit()" style="margin-top:20px;">💪 Edit strength schedule</button>
+      <button class="btn-ghost" onclick="openBackfill()" style="margin-top:20px;">📥 Backfill runs from Strava CSV</button>
+      <button class="btn-ghost" onclick="openStrengthEdit()" style="margin-top:8px;">💪 Edit strength schedule</button>
       <button class="btn-ghost" onclick="resetPlan()" style="margin-top:8px;">Start a new plan</button>
     </div>
 
@@ -1736,7 +1841,7 @@ function getPhaseColor(phaseName) {
 }
 
 function showView(name) {
-  ['consent', 'passcode', 'setup', 'loading', 'dashboard', 'strength'].forEach(v => {
+  ['consent', 'passcode', 'setup', 'loading', 'dashboard', 'strength', 'backfill'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
@@ -2326,6 +2431,260 @@ function submitWellness() {
 function cancelWellness() {
   wellnessForm = { open: false, sleep: null, soreness: null };
   renderHome();
+}
+
+// ════════════════════════════════════════════════════
+// BACKFILL FROM STRAVA CSV
+// ════════════════════════════════════════════════════
+let backfillRuns = []; // [{ date, name, distance, duration, avgHR, type, isoDate, exists }]
+
+function openBackfill() {
+  backfillRuns = [];
+  document.getElementById('backfill-csv-input').value = '';
+  document.getElementById('backfill-preview').classList.add('hidden');
+  document.getElementById('backfill-empty').classList.add('hidden');
+  document.getElementById('backfill-alert').classList.add('hidden');
+  prevView = 'dashboard';
+  showView('backfill');
+}
+
+function cancelBackfill() {
+  backfillRuns = [];
+  showView(prevView);
+}
+
+function showBackfillAlert(msg) {
+  const el = document.getElementById('backfill-alert');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+// Parse a CSV line respecting quoted fields
+function parseCSVLine(line) {
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i+1] === '"') { cur += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (c === ',' && !inQuotes) {
+      out.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function findCol(headers, patterns) {
+  for (const p of patterns) {
+    const re = new RegExp(p, 'i');
+    const idx = headers.findIndex(h => re.test(h));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+// Parse Strava activities.csv
+function parseStravaCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.length > 0);
+  if (!lines.length) return [];
+  const headers = parseCSVLine(lines[0]);
+
+  // Find columns by pattern (Strava's CSV column names vary slightly by year)
+  const idxDate     = findCol(headers, ['^Activity Date$', 'Date']);
+  const idxType     = findCol(headers, ['^Activity Type$', '^Type$']);
+  const idxName     = findCol(headers, ['^Activity Name$', '^Name$']);
+  const idxDist     = findCol(headers, ['^Distance$']);
+  const idxDistRaw  = findCol(headers, ['^Distance\\.1$', 'Distance \\(meters\\)']);
+  const idxMoving   = findCol(headers, ['^Moving Time$', 'Moving Time \\(s\\)']);
+  const idxElapsed  = findCol(headers, ['^Elapsed Time$']);
+  const idxAvgHR    = findCol(headers, ['^Average Heart Rate$', 'Avg.* Heart Rate']);
+  const idxMaxHR    = findCol(headers, ['^Max Heart Rate$']);
+
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCSVLine(lines[i]);
+    const type = idxType >= 0 ? cols[idxType] : '';
+    if (!/run/i.test(type)) continue; // skip non-runs
+
+    const dateRaw = idxDate >= 0 ? cols[idxDate] : '';
+    const d = new Date(dateRaw);
+    if (isNaN(d)) continue;
+    const isoDate = d.toISOString().slice(0, 10);
+
+    // Distance: prefer the display column (already in user's units, usually mi or km)
+    // Strava .1 column is in meters
+    let distMi = null;
+    if (idxDist >= 0) {
+      const v = parseFloat(cols[idxDist]);
+      if (!isNaN(v)) distMi = v;
+    }
+    if (distMi == null && idxDistRaw >= 0) {
+      const meters = parseFloat(cols[idxDistRaw]);
+      if (!isNaN(meters)) distMi = meters / 1609.344;
+    }
+    // Heuristic: Strava sometimes outputs km as the display value. If the number
+    // looks suspiciously large for miles given the time, that's a hint — but for
+    // simplicity assume display is whatever the user set in Strava prefs.
+
+    // Duration: prefer Moving Time (seconds)
+    let durSec = null;
+    if (idxMoving >= 0) {
+      const v = parseFloat(cols[idxMoving]);
+      if (!isNaN(v)) durSec = v;
+    }
+    if (durSec == null && idxElapsed >= 0) {
+      const v = parseFloat(cols[idxElapsed]);
+      if (!isNaN(v)) durSec = v;
+    }
+    let duration = '';
+    if (durSec) {
+      const h = Math.floor(durSec / 3600);
+      const m = Math.floor((durSec % 3600) / 60);
+      const s = Math.floor(durSec % 60);
+      duration = h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+                       : `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    const avgHR = idxAvgHR >= 0 ? parseInt(cols[idxAvgHR]) || null : null;
+
+    // Guess workout type from distance (rough)
+    let runType = 'Easy';
+    if (distMi != null) {
+      if (distMi >= 10) runType = 'Long';
+    }
+
+    out.push({
+      isoDate: isoDate,
+      date: dateRaw,
+      name: idxName >= 0 ? cols[idxName] : '',
+      distance: distMi != null ? Math.round(distMi * 100) / 100 : null,
+      duration: duration,
+      avgHR: avgHR,
+      type: runType
+    });
+  }
+  // Sort newest first
+  out.sort((a, b) => b.isoDate.localeCompare(a.isoDate));
+  return out;
+}
+
+async function handleBackfillCSV(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  document.getElementById('backfill-alert').classList.add('hidden');
+
+  try {
+    const text = await file.text();
+    const parsed = parseStravaCSV(text);
+    if (!parsed.length) {
+      document.getElementById('backfill-preview').classList.add('hidden');
+      document.getElementById('backfill-empty').classList.remove('hidden');
+      showBackfillAlert("No runs found in this CSV. Make sure it's the activities.csv from Strava's bulk export.");
+      return;
+    }
+    backfillRuns = parsed;
+    document.getElementById('backfill-preview').classList.remove('hidden');
+    document.getElementById('backfill-empty').classList.add('hidden');
+    renderBackfillPreview();
+  } catch (e) {
+    showBackfillAlert('Could not read file: ' + e.message);
+  }
+}
+
+function getBackfillFiltered() {
+  const range = document.getElementById('backfill-range').value;
+  let filtered = backfillRuns.slice();
+  if (range !== 'all') {
+    const days = parseInt(range);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffISO = cutoff.toISOString().slice(0, 10);
+    filtered = filtered.filter(r => r.isoDate >= cutoffISO);
+  }
+  // Mark which ones already have a check-in for that date
+  filtered.forEach(r => {
+    r.exists = !!(checkIns[r.isoDate] && checkIns[r.isoDate].run);
+  });
+  return filtered;
+}
+
+function renderBackfillPreview() {
+  const filtered = getBackfillFiltered();
+  const newOnes = filtered.filter(r => !r.exists);
+  const skipped = filtered.length - newOnes.length;
+
+  document.getElementById('backfill-summary').innerHTML =
+    `Found <strong>${filtered.length}</strong> run${filtered.length !== 1 ? 's' : ''} in range. ` +
+    `<strong>${newOnes.length}</strong> will be imported` +
+    (skipped > 0 ? ` (${skipped} skipped — already logged for that date)` : '') + '.';
+
+  const rowsEl = document.getElementById('backfill-rows');
+  if (!filtered.length) {
+    rowsEl.innerHTML = '<div class="empty" style="padding:20px;">No runs in this range</div>';
+    return;
+  }
+
+  rowsEl.innerHTML = filtered.map(r => {
+    const stats = [];
+    if (r.distance) stats.push(r.distance + ' mi');
+    if (r.duration) stats.push(r.duration);
+    if (r.avgHR) stats.push('HR ' + r.avgHR);
+    return `
+      <div class="backfill-row${r.exists ? ' skipped' : ''}">
+        <div></div>
+        <div>
+          <div class="date">${r.isoDate}</div>
+          <div class="name">${escape(r.name || r.type)}</div>
+          ${r.exists ? '<div class="skipped-tag">⚠ Already logged on this date</div>' : ''}
+        </div>
+        <div class="stats">${escape(stats.join(' · '))}</div>
+      </div>`;
+  }).join('');
+
+  const btn = document.getElementById('backfill-import-btn');
+  btn.textContent = newOnes.length > 0 ? `Import ${newOnes.length} run${newOnes.length !== 1 ? 's' : ''}` : 'Nothing to import';
+  btn.disabled = newOnes.length === 0;
+}
+
+function confirmBackfillImport() {
+  const filtered = getBackfillFiltered();
+  const newOnes = filtered.filter(r => !r.exists);
+  if (!newOnes.length) return;
+
+  newOnes.forEach(r => {
+    const data = {
+      status: 'done',
+      rpe: null,
+      note: r.name || '',
+      loggedAt: new Date().toISOString(),
+      actualType: r.type
+    };
+    if (r.distance) data.distance = r.distance;
+    if (r.duration) data.duration = r.duration;
+    if (r.avgHR)    data.avgHR    = r.avgHR;
+    if (!checkIns[r.isoDate]) checkIns[r.isoDate] = {};
+    checkIns[r.isoDate].run = data;
+  });
+
+  // Persist
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const payload = raw ? JSON.parse(raw) : {};
+    payload.checkIns = checkIns;
+    payload.savedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e) {}
+
+  alert(`Imported ${newOnes.length} runs! ✅`);
+  backfillRuns = [];
+  showView('dashboard');
+  renderDashboard();
 }
 
 function resetPlan() {

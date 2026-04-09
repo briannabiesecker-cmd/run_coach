@@ -365,6 +365,7 @@ function weeklyReview(params) {
       var noteText = d.note ? ', "' + d.note + '"' : '';
       // Actual run metrics if logged
       var actualParts = [];
+      if (d.actualType && d.actualType !== d.plannedType) actualParts.push(d.actualType + ' (substituted)');
       if (d.actualDistance) actualParts.push(d.actualDistance + ' mi');
       if (d.actualDuration) actualParts.push(d.actualDuration);
       if (d.actualHR) actualParts.push('HR ' + d.actualHR);
