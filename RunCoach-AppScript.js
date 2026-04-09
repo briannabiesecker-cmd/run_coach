@@ -94,72 +94,91 @@ function doPost(e) {
 }
 
 // ══════════════════════════════════════════════════
-// CLOUD STORAGE — Google Sheets backing store
+// CLOUD STORAGE — one Google Sheet per user, in a RunCoach folder
 // ══════════════════════════════════════════════════
 //
-// Schema: a single Google Sheet with one tab "users", columns:
-//   A: userName    (lowercase, used as the key)
-//   B: payload     (full JSON blob — plan, checkIns, wellness, reviews,
-//                    profile, strengthSchedule, planStartDate, etc.)
-//   C: updatedAt   (ISO timestamp)
+// Layout:
+//   /My Drive/RunCoach/                 ← folder, created on first save
+//     RunCoach - Brianna  (sheet)       ← one file per user
+//     RunCoach - Alex     (sheet)
+//     RunCoach - Sam      (sheet)
 //
-// The sheet ID is stored in script properties as DATA_SHEET_ID. On first
-// call, getOrCreateDataSheet() creates a new spreadsheet, sets up the
-// header row, and writes the ID to properties — so subsequent calls reuse
-// the same sheet (no duplicate-creation spam).
+// Each per-user sheet has a single tab "data" with:
+//   Row 1: payload | updatedAt          (frozen header)
+//   Row 2: <JSON>  | <ISO timestamp>    (the only data row)
+//
+// Lookups: the per-user sheet ID is cached in Script Properties as
+// USER_SHEET_<lowercased name>. The folder ID is cached as
+// RUNCOACH_FOLDER_ID. Both caches mean repeat calls don't spam Drive
+// — first call creates, every subsequent call reuses the cached ID.
+// If a cached ID points to a deleted file, we recreate cleanly.
 
-function getOrCreateDataSheet() {
+function getOrCreateRunCoachFolder() {
   var props = PropertiesService.getScriptProperties();
-  var sheetId = props.getProperty('DATA_SHEET_ID');
-  var ss;
-  if (sheetId) {
-    try {
-      ss = SpreadsheetApp.openById(sheetId);
-    } catch (err) {
-      // ID was set but the sheet was deleted/unshared — fall through to
-      // create a new one rather than crashing every cloud action.
-      ss = null;
-    }
+  var folderId = props.getProperty('RUNCOACH_FOLDER_ID');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); }
+    catch (err) { /* fall through to create */ }
   }
-  if (!ss) {
-    ss = SpreadsheetApp.create('Run Coach Data');
-    props.setProperty('DATA_SHEET_ID', ss.getId());
-    var firstSheet = ss.getSheets()[0];
-    firstSheet.setName('users');
-    firstSheet.appendRow(['userName', 'payload', 'updatedAt']);
-    firstSheet.setFrozenRows(1);
+  // Look for an existing "RunCoach" folder at the root before creating
+  // (handles the case where the user manually made one or restored a
+  // previous deployment).
+  var existing = DriveApp.getFoldersByName('RunCoach');
+  if (existing.hasNext()) {
+    var f = existing.next();
+    props.setProperty('RUNCOACH_FOLDER_ID', f.getId());
+    return f;
   }
-  // Ensure the "users" tab exists even if the spreadsheet was opened by ID
-  var usersSheet = ss.getSheetByName('users');
-  if (!usersSheet) {
-    usersSheet = ss.insertSheet('users');
-    usersSheet.appendRow(['userName', 'payload', 'updatedAt']);
-    usersSheet.setFrozenRows(1);
-  }
-  return usersSheet;
+  var folder = DriveApp.createFolder('RunCoach');
+  props.setProperty('RUNCOACH_FOLDER_ID', folder.getId());
+  return folder;
 }
 
-function findUserRow(sheet, userName) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return -1;
-  var names = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < names.length; i++) {
-    if (String(names[i][0]).toLowerCase() === userName.toLowerCase()) {
-      return i + 2; // 1-indexed + header offset
-    }
+function getOrCreateUserSheet(userName) {
+  var key = 'USER_SHEET_' + userName.toLowerCase();
+  var props = PropertiesService.getScriptProperties();
+  var sheetId = props.getProperty(key);
+  var ss;
+  if (sheetId) {
+    try { ss = SpreadsheetApp.openById(sheetId); }
+    catch (err) { ss = null; /* deleted or unshared — recreate */ }
   }
-  return -1;
+  if (!ss) {
+    var folder = getOrCreateRunCoachFolder();
+    var fileName = 'RunCoach - ' + userName;
+    // Check if a file with this name already exists in the folder
+    // (recovery path: cached ID was lost but the file is still there).
+    var matches = folder.getFilesByName(fileName);
+    if (matches.hasNext()) {
+      var existingFile = matches.next();
+      ss = SpreadsheetApp.openById(existingFile.getId());
+    } else {
+      ss = SpreadsheetApp.create(fileName);
+      // Move the freshly-created file from My Drive root into RunCoach
+      var file = DriveApp.getFileById(ss.getId());
+      folder.addFile(file);
+      DriveApp.getRootFolder().removeFile(file);
+    }
+    props.setProperty(key, ss.getId());
+  }
+  // Ensure the "data" tab exists with the right header
+  var sheet = ss.getSheetByName('data');
+  if (!sheet) {
+    sheet = ss.insertSheet('data');
+    sheet.appendRow(['payload', 'updatedAt']);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
 function loadUserData(body) {
   var userName = (body.userName || '').trim();
   if (!userName) return { error: 'userName is required' };
   try {
-    var sheet = getOrCreateDataSheet();
-    var rowIdx = findUserRow(sheet, userName);
-    if (rowIdx === -1) return { success: true, payload: null }; // new user
-    var payloadStr = sheet.getRange(rowIdx, 2).getValue();
-    var updatedAt  = sheet.getRange(rowIdx, 3).getValue();
+    var sheet = getOrCreateUserSheet(userName);
+    if (sheet.getLastRow() < 2) return { success: true, payload: null }; // new user, empty sheet
+    var payloadStr = sheet.getRange(2, 1).getValue();
+    var updatedAt  = sheet.getRange(2, 2).getValue();
     if (!payloadStr) return { success: true, payload: null };
     var parsed;
     try { parsed = JSON.parse(payloadStr); }
@@ -176,20 +195,16 @@ function saveUserData(body) {
   if (!body.payload) return { error: 'payload is required' };
   try {
     var payloadStr = JSON.stringify(body.payload);
-    // Google Sheets has a 50,000 character limit per cell. Detect early
-    // so we can return a clear error rather than letting setValue silently
-    // truncate.
     if (payloadStr.length > 49500) {
       return { error: 'Payload too large for Sheets (' + payloadStr.length + ' chars > 49500 limit). Trim check-in history or reduce plan size.' };
     }
-    var sheet = getOrCreateDataSheet();
-    var rowIdx = findUserRow(sheet, userName);
+    var sheet = getOrCreateUserSheet(userName);
     var nowIso = new Date().toISOString();
-    if (rowIdx === -1) {
-      sheet.appendRow([userName, payloadStr, nowIso]);
+    // Always write to row 2 (overwrite the single data row)
+    if (sheet.getLastRow() < 2) {
+      sheet.appendRow([payloadStr, nowIso]);
     } else {
-      sheet.getRange(rowIdx, 2).setValue(payloadStr);
-      sheet.getRange(rowIdx, 3).setValue(nowIso);
+      sheet.getRange(2, 1, 1, 2).setValues([[payloadStr, nowIso]]);
     }
     return { success: true, updatedAt: nowIso };
   } catch (err) {
