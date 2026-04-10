@@ -133,6 +133,25 @@ function getOrCreateUserSheet(userName) {
 // The function takes a parsed payload, mutates/returns it, and bumps
 // the version. Loaders call this on every read.
 /**
+ * List all existing user profiles. Returns just the names (derived from
+ * the USER_SHEET_* script property keys), not any plan data. Used by
+ * the frontend name screen to show tappable buttons instead of making
+ * the user remember what they typed last time.
+ *
+ * @return {{success: true, users: string[]}}
+ */
+function listUsers() {
+  var props = PropertiesService.getScriptProperties().getProperties();
+  var users = [];
+  Object.keys(props).forEach(function(k) {
+    if (k.indexOf('USER_SHEET_') === 0) {
+      users.push(k.replace('USER_SHEET_', ''));
+    }
+  });
+  return { success: true, users: users.sort() };
+}
+
+/**
  * Schema migration entrypoint. Today this is a no-op (we're at v1).
  * When the payload schema changes, add migration steps here. Loaders
  * call this on every read so old payloads upgrade transparently.

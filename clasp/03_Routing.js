@@ -84,6 +84,11 @@ function doGet(e) {
       result = { ok: true, version: BACKEND_VERSION, ts: new Date().toISOString() };
     } else if (action === 'quotaUsed') {
       result = getQuotaUsed();
+    } else if (action === 'listUsers') {
+      // Requires passcode — returns just the names, no plan data.
+      var authLU = checkPasscode(e.parameter.passcode);
+      if (!authLU.ok) { result = { error: authLU.error }; }
+      else { result = listUsers(); }
     } else if (action === 'verifyPasscode') {
       result = checkPasscode(e.parameter.passcode);
     } else if (action === 'coach') {

@@ -2907,6 +2907,32 @@
     margin-top: 2px;
   }
 
+  /* Profile picker buttons (name screen) */
+  .profile-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .profile-btn:hover {
+    background: var(--bg-elev-2);
+    border-color: var(--accent-border);
+  }
+  .profile-icon { font-size: 22px; }
+  .profile-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+
   /* Buttons */
   .btn-primary {
     width: 100%;
@@ -3134,13 +3160,15 @@
     <div class="setup-hero">
       <div class="setup-icon">👋</div>
       <div class="setup-title">Who are you?</div>
-      <div class="setup-sub">So your plan and log sync across devices</div>
+      <div class="setup-sub">Pick your profile or create a new one</div>
     </div>
     <div id="name-alert" class="alert error hidden"></div>
+    <!-- Existing profiles (populated on view show) -->
+    <div id="existing-profiles" style="margin-bottom:16px;"></div>
+    <!-- New user fallback -->
+    <div style="font-size:10px;color:var(--ink-light);text-transform:uppercase;letter-spacing:1px;font-weight:800;margin-bottom:6px;">Or create new</div>
     <div class="field">
-      <label>Your name</label>
-      <input type="text" id="name-input" autocomplete="off" placeholder="e.g. Brianna" />
-      <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">Used as your sync key. Pick something simple — first name works.</div>
+      <input type="text" id="name-input" autocomplete="off" placeholder="Type your name" />
     </div>
     <button class="btn-primary" id="name-btn" onclick="submitName()">Continue</button>
   </div>
@@ -3697,6 +3725,43 @@ function showView(name) {
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
   if (name === 'setup') prefillSetupForm();
+  if (name === 'name') loadExistingProfiles();
+}
+
+// Fetch existing user profiles from the backend and render as tappable
+// buttons on the name screen. Best-effort — if the fetch fails (offline,
+// first-ever use, etc.) the text input is still there as a fallback.
+async function loadExistingProfiles() {
+  const el = document.getElementById('existing-profiles');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:11px;color:var(--ink-light);text-align:center;">Loading profiles…</div>';
+  try {
+    const passcode = getPasscode();
+    if (!passcode) { el.innerHTML = ''; return; }
+    const resp = await fetch(SCRIPT_URL + '?action=listUsers&passcode=' + encodeURIComponent(passcode) + '&callback=cb');
+    const text = await resp.text();
+    // Strip JSONP wrapper
+    const json = text.replace(/^cb\((.*)\);?\s*$/, '$1');
+    const data = JSON.parse(json);
+    if (!data.success || !data.users || !data.users.length) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--ink-light);text-align:center;padding:10px;">No existing profiles yet. Type your name below to get started.</div>';
+      return;
+    }
+    el.innerHTML = data.users.map(function(name) {
+      const display = name.charAt(0).toUpperCase() + name.slice(1);
+      return '<button class="profile-btn" onclick="pickExistingProfile(\'' + name.replace(/'/g, "\\'") + '\')">' +
+             '<span class="profile-icon">🏃</span>' +
+             '<span class="profile-name">' + display + '</span>' +
+             '</button>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--ink-light);text-align:center;">Could not load profiles. Type your name below.</div>';
+  }
+}
+
+function pickExistingProfile(name) {
+  setUserName(name);
+  hydrateFromCloudAndRoute();
 }
 
 // Pre-fill the setup form with the runner profile so they don't
