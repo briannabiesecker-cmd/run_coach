@@ -5340,22 +5340,31 @@ function resetPlan() {
   checkIns = {};
   wellness = {};
   weeklyReviews = {};
+  weeklyReviews = {};
+  runnerProfile = {};        // wipe stale race name / mileage cache too
   uploadedFiles = [];
   confirmedRace = null;
-  document.getElementById('file-list').innerHTML = '';
-  // Reset race lookup state
-  const raceInput = document.getElementById('race-name');
-  raceInput.value = '';
-  raceInput.disabled = false;
-  const lookupBtn = document.getElementById('lookup-btn');
-  lookupBtn.disabled = false;
-  lookupBtn.textContent = 'Find';
-  document.getElementById('race-confirm-card').classList.add('hidden');
-  document.getElementById('race-manual-fields').classList.add('hidden');
-  document.getElementById('form-alert').classList.add('hidden');
+  // Push the now-empty state to the cloud so the sheet doesn't keep
+  // serving the old plan on next hydrate
+  pushToCloud();
+  // Defensive: each of these elements may or may not exist depending on
+  // which view is mounted. Wrap in null checks so a missing element
+  // never throws and strands the user on the dashboard (the bug we
+  // just fixed: lookup-btn was removed but resetPlan still touched it).
+  const safeGet = (id) => document.getElementById(id);
+  const fileList = safeGet('file-list'); if (fileList) fileList.innerHTML = '';
+  const raceInput = safeGet('race-name'); if (raceInput) { raceInput.value = 'Richmond Marathon'; raceInput.disabled = false; }
+  const raceDistance = safeGet('race-distance'); if (raceDistance) raceDistance.value = 'Marathon';
+  const raceDate = safeGet('race-date'); if (raceDate) raceDate.value = '2026-11-14';
+  const formAlert = safeGet('form-alert'); if (formAlert) formAlert.classList.add('hidden');
+  // Profile fields too
+  ['weekly-mileage', 'longest-recent-run', 'goal-time', 'days-per-week', 'long-run-day', 'injury-notes'].forEach(id => {
+    const el = safeGet(id);
+    if (el) el.value = '';
+  });
   renderStrengthRows();
   showView('setup');
-  document.getElementById('status-pill').textContent = 'Setup';
+  const statusPill = safeGet('status-pill'); if (statusPill) statusPill.textContent = 'Setup';
 }
 
 // ════════════════════════════════════════════════════
