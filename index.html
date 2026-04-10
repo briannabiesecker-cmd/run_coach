@@ -3915,6 +3915,13 @@ let lastCloudPushStatus = null; // null | 'syncing' | 'ok' | 'error' | 'skipped'
 let lastCloudPushMessage = '';
 let lastCloudPushAt = null;
 
+// Race-condition queue: if pushToCloud is called while another push
+// is in flight, set this flag. The in-flight push's finally block
+// will re-fire after completing so the latest state always lands.
+// Without this, rapid successive pushes (e.g. resetPlan immediately
+// followed by savePlan) silently drop the second push.
+let pendingPush = false;
+
 function updateCloudStatusPill() {
   const el = document.getElementById('cloud-status-pill');
   if (!el) return;
@@ -3950,8 +3957,14 @@ async function pushToCloud() {
     updateCloudStatusPill();
     return { skipped: 'no userName set' };
   }
-  if (cloudSyncing) return { skipped: 'already in flight' };
+  // If another push is in flight, mark a pending push so the in-flight
+  // one will re-fire when it completes. Latest state always wins.
+  if (cloudSyncing) {
+    pendingPush = true;
+    return { skipped: 'queued — will fire after current push completes' };
+  }
   cloudSyncing = true;
+  pendingPush = false;
   lastCloudPushStatus = 'syncing';
   lastCloudPushMessage = '';
   updateCloudStatusPill();
@@ -3994,6 +4007,13 @@ async function pushToCloud() {
     return { error: 'fetch failed: ' + e.message };
   } finally {
     cloudSyncing = false;
+    // If another push was queued while this one was running, fire it
+    // now so the latest state lands. setTimeout 0 to break out of the
+    // current call stack and avoid any sync re-entrance.
+    if (pendingPush) {
+      pendingPush = false;
+      setTimeout(function() { pushToCloud(); }, 0);
+    }
   }
 }
 
