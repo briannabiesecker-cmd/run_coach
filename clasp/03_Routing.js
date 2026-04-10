@@ -60,10 +60,15 @@ function checkRateLimit(identity) {
 function rateLimitIdentity(body) {
   if (body && body.userName) return 'user:' + String(body.userName).toLowerCase();
   if (body && body.passcode) {
+    // Apps Script's Utilities.computeDigest returns a Java byte[],
+    // NOT a JS Array — Array.prototype methods like .map() throw
+    // "bytes.map is not a function". Use a plain for loop instead.
     var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body.passcode);
-    var hex = bytes.map(function(b) {
-      return ('0' + (b < 0 ? b + 256 : b).toString(16)).slice(-2);
-    }).join('');
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) {
+      var b = bytes[i] < 0 ? bytes[i] + 256 : bytes[i];
+      hex += ('0' + b.toString(16)).slice(-2);
+    }
     return 'pc:' + hex.slice(0, 16);
   }
   return null;
