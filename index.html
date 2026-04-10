@@ -3161,47 +3161,30 @@
 
     <div id="form-alert" class="alert error hidden"></div>
 
-    <!-- Race lookup -->
+    <!-- Race details — manual entry, no lookup -->
     <div class="field">
       <label>Race name</label>
-      <div style="display:grid;grid-template-columns:1fr auto;gap:6px;">
-        <input type="text" id="race-name" placeholder="e.g. Richmond Marathon" />
-        <button type="button" class="btn-primary" id="lookup-btn" style="padding:0 16px;width:auto;font-size:13px;" onclick="lookupRaceClick()">Find</button>
-      </div>
-      <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">We'll look it up and confirm with you</div>
+      <input type="text" id="race-name" value="Richmond Marathon" placeholder="e.g. Richmond Marathon" />
     </div>
-
-    <!-- Confirmation card (shown after successful lookup) -->
-    <div id="race-confirm-card" class="card hidden" style="border:1px solid var(--accent-border);background:var(--accent-bg);">
-      <div style="font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">We found</div>
-      <div id="race-confirm-name" style="font-size:16px;font-weight:800;color:var(--ink);margin-top:4px;"></div>
-      <div id="race-confirm-meta" style="font-size:13px;color:var(--ink-mid);margin-top:2px;"></div>
-      <div id="race-confirm-confidence" style="font-size:11px;color:var(--ink-light);margin-top:6px;"></div>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button type="button" class="btn-primary" style="flex:1;padding:10px;font-size:13px;" onclick="confirmRaceLookup()">Yes, that's it</button>
-        <button type="button" class="btn-ghost" style="flex:1;margin-top:0;" onclick="rejectRaceLookup()">Edit manually</button>
+    <div class="row">
+      <div class="field">
+        <label>Race distance</label>
+        <select id="race-distance">
+          <option value="">Choose…</option>
+          <option value="5K">5K</option>
+          <option value="10K">10K</option>
+          <option value="Half Marathon">Half Marathon</option>
+          <option value="Marathon" selected>Marathon</option>
+        </select>
       </div>
-    </div>
-
-    <!-- Manual fields (shown if lookup fails or user rejects) -->
-    <div id="race-manual-fields" class="hidden">
-      <div class="row">
-        <div class="field">
-          <label>Race distance</label>
-          <select id="race-distance">
-            <option value="">Choose…</option>
-            <option value="5K">5K</option>
-            <option value="10K">10K</option>
-            <option value="Half Marathon">Half Marathon</option>
-            <option value="Marathon">Marathon</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Race date</label>
-          <input type="date" id="race-date" />
-        </div>
+      <div class="field">
+        <label>Race date</label>
+        <input type="date" id="race-date" value="2026-11-14" />
       </div>
     </div>
+    <!-- Hidden legacy elements preserved so old code paths don't crash -->
+    <div id="race-confirm-card" class="hidden"></div>
+    <div id="race-manual-fields" class="hidden"></div>
 
     <div class="row">
       <div class="field">
@@ -3737,6 +3720,12 @@ function prefillSetupForm() {
     const el = document.getElementById(id);
     if (el && val != null && val !== '') el.value = val;
   };
+  // Race fields — only override the HTML defaults (Richmond Marathon /
+  // Marathon / 2026-11-14) if the user has previously saved a profile.
+  setVal('race-name',          p.raceName);
+  setVal('race-distance',      p.raceDistance);
+  setVal('race-date',          p.raceDate);
+  // Profile fields
   setVal('weekly-mileage',     p.weeklyMileage);
   setVal('longest-recent-run', p.longestRecentRun);
   setVal('goal-time',          p.goalTime);
@@ -6132,17 +6121,10 @@ function buildPlanLocally(inputs) {
 }
 
 async function submitForm() {
-  // Prefer confirmed lookup; fall back to manual fields
-  let distance, date, raceName;
-  if (confirmedRace) {
-    distance = confirmedRace.distance;
-    date     = confirmedRace.date;
-    raceName = confirmedRace.name;
-  } else {
-    distance = document.getElementById('race-distance').value;
-    date     = document.getElementById('race-date').value;
-    raceName = document.getElementById('race-name').value;
-  }
+  // Race details — manual entry only (lookup removed for speed/quota)
+  const distance = document.getElementById('race-distance').value;
+  const date     = document.getElementById('race-date').value;
+  const raceName = document.getElementById('race-name').value;
   const mileage          = document.getElementById('weekly-mileage').value;
   const goal             = document.getElementById('goal-time').value;
   const style            = document.getElementById('coaching-style').value;
