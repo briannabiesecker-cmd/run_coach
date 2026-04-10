@@ -4200,10 +4200,25 @@ function getMondayOfThisWeek() {
   return d.toISOString().slice(0, 10);
 }
 
-function savePlan(p) {
+// savePlan(p, opts)
+//   opts.isNewPlan — true ONLY when generating a fresh plan (sets the
+//     planStartDate to this Monday). On subsequent saves (race adds,
+//     swap, weekly review apply, etc.) we PRESERVE the existing
+//     planStartDate so the calendar doesn't shift. This was a critical
+//     bug found in audit: previous version reset to today's Monday on
+//     EVERY save, breaking week math whenever a runner modified an
+//     existing plan.
+function savePlan(p, opts) {
+  opts = opts || {};
+  // Preserve the existing planStartDate unless this is a brand-new plan
+  // OR there isn't one yet (first save ever)
+  const existingStart = planStartDate;
+  const startDate = (opts.isNewPlan || !existingStart)
+    ? getMondayOfThisWeek()
+    : existingStart;
   const payload = {
     plan: p,
-    planStartDate: getMondayOfThisWeek(), // ALWAYS a Monday so week math aligns
+    planStartDate: startDate,
     savedAt: new Date().toISOString(),
     strengthSchedule: strengthSchedule,
     checkIns: checkIns,
@@ -5820,6 +5835,302 @@ function renderFileList() {
 // ════════════════════════════════════════════════════
 // SUBMIT FORM
 // ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// LOCAL PLAN GENERATOR — no Gemini call
+// ════════════════════════════════════════════════════
+//
+// Plan generation happens entirely in JS, no API call. The user's
+// inputs (race, mileage, days/week, goal time) pick a hardcoded
+// template and that template is materialized into a full plan JSON
+// in the same shape Gemini was producing. This means:
+//   - No quota burn — generation is free and instant
+//   - Deterministic — same inputs always produce the same plan
+//   - Offline-capable — no network round-trip required
+//
+// Templates are real published programs:
+//   marathon novice  → Hal Higdon Novice 1 (18 weeks, 4 days/wk)
+//   half novice      → Hal Higdon Novice 1 Half (12 weeks, 4 days/wk)
+//   10K novice       → Hal Higdon Novice 10K (8 weeks, 4 days/wk)
+//   5K novice        → Hal Higdon Spring Beginner (8 weeks, 4 days/wk)
+//
+// For runners at intermediate or advanced tier, v1 falls back to the
+// novice template with a note that quality work isn't yet supported
+// in local generation. The Gemini path remains available via the
+// backend coach() action when quota recovers.
+
+// Tier inference (matches the backend rules in clasp/05_Tier.js)
+function inferTierFromMileage(mileage, longestRecentRun) {
+  const miles   = parseFloat(mileage) || 0;
+  const longRun = parseFloat(longestRecentRun) || 0;
+  let tier;
+  if (miles >= 40)      tier = 'advanced';
+  else if (miles >= 20) tier = 'intermediate';
+  else                  tier = 'novice';
+  if (longRun >= 15 && tier === 'intermediate') tier = 'advanced';
+  if (longRun >= 9  && tier === 'novice')       tier = 'intermediate';
+  return tier;
+}
+
+function getDistanceKeyFE(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (s.indexOf('half') !== -1) return 'half';
+  if (s.indexOf('marathon') !== -1) return 'marathon';
+  if (s.indexOf('10k') !== -1 || s.indexOf('10 k') !== -1) return '10k';
+  if (s.indexOf('5k') !== -1  || s.indexOf('5 k') !== -1)  return '5k';
+  return 'marathon';
+}
+
+// Hardcoded weekly mileage grids per template.
+// Each row: [weekNum, tueMi, wedMi, thuMi, satLongMi]
+// Mon = Rest, Fri = Rest, Sun = Cross/Race
+const PLAN_TEMPLATE_GRIDS = {
+  // ── Hal Higdon Novice 1 marathon — 18 weeks ──
+  marathon_novice: {
+    label: 'Hal Higdon Novice 1 marathon',
+    totalWeeks: 18,
+    raceDistanceMi: 26.2,
+    grid: [
+      [ 1, 3, 3, 3, 6 ],
+      [ 2, 3, 3, 3, 7 ],
+      [ 3, 3, 4, 3, 5 ],   // cutback
+      [ 4, 3, 4, 3, 9 ],
+      [ 5, 3, 5, 3, 10 ],
+      [ 6, 3, 5, 3, 7 ],   // cutback
+      [ 7, 4, 5, 4, 12 ],
+      [ 8, 4, 6, 4, 13 ],
+      [ 9, 4, 6, 4, 10 ],  // cutback
+      [10, 4, 7, 4, 15 ],
+      [11, 5, 8, 5, 16 ],
+      [12, 5, 8, 5, 12 ],  // cutback
+      [13, 5, 8, 5, 18 ],
+      [14, 5, 9, 5, 14 ],  // cutback
+      [15, 5, 10,5, 20 ],  // peak
+      [16, 5, 8, 5, 12 ],  // taper
+      [17, 4, 6, 4, 8 ],   // taper
+      [18, 3, 4, 2, 0 ]    // race week
+    ],
+    phases: [
+      { name: 'Base',  weeks: '1-8',   goal: 'Build the aerobic base. Run easy, accumulate time on feet.' },
+      { name: 'Build', weeks: '9-13',  goal: 'Stretch the long run progressively; mid-week miles increase.' },
+      { name: 'Peak',  weeks: '14-15', goal: 'Peak long runs — 18mi and 20mi. Trust the plan.' },
+      { name: 'Taper', weeks: '16-18', goal: 'Reduce volume sharply. Fitness is banked; arrive fresh.' }
+    ],
+    phaseFor: function(wk) {
+      if (wk <= 8)  return 'Base';
+      if (wk <= 13) return 'Build';
+      if (wk <= 15) return 'Peak';
+      return 'Taper';
+    }
+  },
+
+  // ── Hal Higdon Novice 1 Half — 12 weeks ──
+  half_novice: {
+    label: 'Hal Higdon Novice 1 Half',
+    totalWeeks: 12,
+    raceDistanceMi: 13.1,
+    grid: [
+      [ 1, 3, 3, 3, 4 ],
+      [ 2, 3, 3, 3, 5 ],
+      [ 3, 3.5, 3.5, 3.5, 6 ],
+      [ 4, 3.5, 4, 3.5, 7 ],
+      [ 5, 3.5, 4.5, 3.5, 8 ],
+      [ 6, 4, 4.5, 4, 9 ],   // peak cutback at week 9 isn't standard for novice 1 half — keep build
+      [ 7, 4, 5, 4, 10 ],
+      [ 8, 4, 5, 4, 9 ],     // cutback
+      [ 9, 4, 5, 4, 11 ],
+      [10, 4, 5.5, 4, 12 ],  // peak
+      [11, 3, 4, 3, 8 ],     // taper
+      [12, 2, 3, 2, 0 ]      // race week
+    ],
+    phases: [
+      { name: 'Base',  weeks: '1-4',   goal: 'Build the habit. Easy + a longer Saturday run.' },
+      { name: 'Build', weeks: '5-8',   goal: 'Mid-week miles + long-run progression to 9mi.' },
+      { name: 'Peak',  weeks: '9-10',  goal: 'Peak long runs — 11 and 12mi.' },
+      { name: 'Taper', weeks: '11-12', goal: 'Cut back, race fresh.' }
+    ],
+    phaseFor: function(wk) {
+      if (wk <= 4)  return 'Base';
+      if (wk <= 8)  return 'Build';
+      if (wk <= 10) return 'Peak';
+      return 'Taper';
+    }
+  },
+
+  // ── Hal Higdon Novice 10K — 8 weeks ──
+  '10k_novice': {
+    label: 'Hal Higdon Novice 10K',
+    totalWeeks: 8,
+    raceDistanceMi: 6.2,
+    grid: [
+      [ 1, 2, 2, 2, 3 ],
+      [ 2, 2, 2.5, 2, 3.5 ],
+      [ 3, 2, 3, 2, 4 ],
+      [ 4, 2.5, 3, 2.5, 4 ],
+      [ 5, 2.5, 3.5, 2.5, 5 ],
+      [ 6, 3, 3.5, 3, 5 ],
+      [ 7, 3, 4, 3, 5.5 ],   // peak
+      [ 8, 2, 3, 2, 0 ]      // race week
+    ],
+    phases: [
+      { name: 'Base',  weeks: '1-3', goal: 'Get comfortable with consistent easy running.' },
+      { name: 'Build', weeks: '4-6', goal: 'Bump mid-week and long-run mileage.' },
+      { name: 'Peak',  weeks: '7',   goal: 'Final 5.5mi long run before taper.' },
+      { name: 'Taper', weeks: '8',   goal: 'Race week — light easy days only.' }
+    ],
+    phaseFor: function(wk) {
+      if (wk <= 3) return 'Base';
+      if (wk <= 6) return 'Build';
+      if (wk <= 7) return 'Peak';
+      return 'Taper';
+    }
+  },
+
+  // ── Hal Higdon Spring Beginner 5K — 8 weeks ──
+  '5k_novice': {
+    label: 'Hal Higdon Spring Beginner 5K',
+    totalWeeks: 8,
+    raceDistanceMi: 3.1,
+    grid: [
+      [ 1, 1.5, 1.5, 1.5, 2 ],
+      [ 2, 1.5, 2, 1.5, 2 ],
+      [ 3, 1.5, 2, 1.5, 2.5 ],
+      [ 4, 2, 2, 2, 2.5 ],
+      [ 5, 2, 2.5, 2, 3 ],
+      [ 6, 2, 2.5, 2, 3.5 ],
+      [ 7, 2, 3, 2, 4 ],     // peak
+      [ 8, 2, 2, 1.5, 0 ]    // race week
+    ],
+    phases: [
+      { name: 'Base',  weeks: '1-3', goal: 'Build the running habit and consistency.' },
+      { name: 'Build', weeks: '4-6', goal: 'Stretch longer runs gradually.' },
+      { name: 'Peak',  weeks: '7',   goal: 'Final 4mi long run.' },
+      { name: 'Taper', weeks: '8',   goal: 'Race week — short easy runs only.' }
+    ],
+    phaseFor: function(wk) {
+      if (wk <= 3) return 'Base';
+      if (wk <= 6) return 'Build';
+      if (wk <= 7) return 'Peak';
+      return 'Taper';
+    }
+  }
+};
+
+// Compute pace zones from goal time + race distance. Used as the
+// runner's training pace anchors. If goal is missing, use rough
+// novice defaults.
+function buildPaceZones(distance, goalTime, tier) {
+  // Default novice paces (will be overridden if goalTime provided)
+  let easyPace = '11:00–11:30/mi';
+  let mPace    = '10:00/mi';
+  let tPace    = '9:30/mi';
+  let iPace    = '8:30/mi';
+  if (goalTime) {
+    // Convert goal time to seconds total, then to pace per mile
+    const parts = String(goalTime).split(':').map(Number);
+    let totalSec = 0;
+    if (parts.length === 3) totalSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    else if (parts.length === 2) totalSec = parts[0] * 60 + parts[1];
+    const distMi = distance === 'marathon' ? 26.2 : distance === 'half' ? 13.1 : distance === '10k' ? 6.2 : 3.1;
+    if (totalSec > 0 && distMi > 0) {
+      const goalSecPerMi = totalSec / distMi;
+      const fmt = (s) => {
+        const m = Math.floor(s / 60);
+        const sec = Math.round(s % 60);
+        return m + ':' + (sec < 10 ? '0' : '') + sec;
+      };
+      mPace    = fmt(goalSecPerMi) + '/mi';
+      easyPace = fmt(goalSecPerMi + 75) + '–' + fmt(goalSecPerMi + 105) + '/mi';
+      tPace    = fmt(goalSecPerMi - 30) + '/mi';
+      iPace    = fmt(goalSecPerMi - 60) + '/mi';
+    }
+  }
+  return {
+    easy:     { value: easyPace, reason: 'Easy is conversational pace, ~60-90 sec/mi over goal pace. Most adaptation happens here.' },
+    marathon: { value: mPace,    reason: 'Goal race pace — used during race rehearsal segments.' },
+    tempo:    { value: tPace,    reason: 'Threshold pace, ~30 sec faster than goal pace. Builds lactate clearance.' },
+    interval: { value: iPace,    reason: '5K-effort pace for VO2 max work. Not used in novice plans.' }
+  };
+}
+
+function buildPlanLocally(inputs) {
+  const distanceKey = getDistanceKeyFE(inputs.raceDistance);
+  const tier = inferTierFromMileage(inputs.weeklyMileage, inputs.longestRecentRun);
+  // Pick the template — for v1 we only have novice grids; intermediate
+  // and advanced fall back to novice with a note.
+  const preferredKey = distanceKey + '_' + tier;
+  const fallbackKey  = distanceKey + '_novice';
+  const templateKey  = PLAN_TEMPLATE_GRIDS[preferredKey] ? preferredKey : fallbackKey;
+  const template = PLAN_TEMPLATE_GRIDS[templateKey];
+  if (!template) {
+    throw new Error('No local template available for ' + distanceKey);
+  }
+
+  const minPerMi = 11.25; // assumed easy pace for time estimates
+  const weeks = template.grid.map(function(row) {
+    const wk = row[0];
+    const tueMi = row[1], wedMi = row[2], thuMi = row[3], satMi = row[4];
+    const phase = template.phaseFor(wk);
+    const isRaceWeek = wk === template.totalWeeks;
+    const days = [
+      { day: 'Mon', type: 'Rest', miles: 0,     note: 'Recovery',                                              estimatedDurationMin: 0 },
+      { day: 'Tue', type: 'Easy', miles: tueMi, note: '',                                                      estimatedDurationMin: Math.round(tueMi * minPerMi) },
+      { day: 'Wed', type: 'Easy', miles: wedMi, note: '',                                                      estimatedDurationMin: Math.round(wedMi * minPerMi) },
+      { day: 'Thu', type: 'Easy', miles: thuMi, note: '',                                                      estimatedDurationMin: Math.round(thuMi * minPerMi) },
+      { day: 'Fri', type: 'Rest', miles: 0,     note: '',                                                      estimatedDurationMin: 0 },
+      isRaceWeek
+        ? { day: 'Sat', type: 'Rest', miles: 0,    note: 'Race day tomorrow — full rest',                    estimatedDurationMin: 0 }
+        : { day: 'Sat', type: 'Long', miles: satMi, note: 'Easy pace throughout — time on feet is the goal', estimatedDurationMin: Math.round(satMi * minPerMi) },
+      isRaceWeek
+        ? { day: 'Sun', type: 'Long', miles: template.raceDistanceMi, note: 'RACE DAY — execute the plan, trust your training', estimatedDurationMin: Math.round(template.raceDistanceMi * minPerMi) }
+        : { day: 'Sun', type: 'Cross', miles: 0,    note: 'Optional: bike, swim, walk — anything non-impact, 30-45 min', estimatedDurationMin: 30 }
+    ];
+    const totalMiles = days.reduce(function(s, d) { return s + (d.miles || 0); }, 0);
+    return {
+      week: wk,
+      phase: phase,
+      focus: isRaceWeek
+        ? 'Race week — trust the work, run the race'
+        : (phase === 'Base'  ? 'Build the habit and accumulate easy miles'
+        :  phase === 'Build' ? 'Stretch the long run; mid-week miles bump'
+        :  phase === 'Peak'  ? 'Peak long runs — the hardest stretch'
+        :                       'Taper — fitness is banked, freshen up'),
+      totalMiles: Math.round(totalMiles * 10) / 10,
+      days: days
+    };
+  });
+
+  const usedFallback = templateKey !== preferredKey;
+  let summary = template.label + ' — locally generated. Volume-only progression with no AI quality work. ' +
+                'Long run builds to ' + template.grid[template.totalWeeks - 2][4] + ' mi peak. ' +
+                'Race day: ' + inputs.raceDistance + '.';
+  if (usedFallback) {
+    summary += ' (Detected ' + tier + ' tier from your mileage, but only novice templates are wired into the local generator. ' +
+               'Regenerate via Gemini once your daily quota recovers for a tier-appropriate plan with quality work.)';
+  }
+
+  return {
+    payloadVersion: 1,
+    raceName: inputs.raceName || 'Your race',
+    raceDate: inputs.raceDate,
+    raceDistance: inputs.raceDistance,
+    totalWeeks: template.totalWeeks,
+    summary: summary,
+    paceZones: buildPaceZones(distanceKey, inputs.goalTime, tier),
+    phases: template.phases,
+    weeks: weeks,
+    holisticGuidance: {
+      recovery:  'Sleep 7-8 hours minimum. The body adapts at rest, not during runs. After Saturday long runs, prioritize a slow walk and protein within 30 min.',
+      strength:  'Optional 2x/week light strength on run days (Tue + Thu) — bodyweight squats, lunges, planks. Skip if any session leaves you sore for the next run.',
+      nutrition: 'Eat normally on weekdays. Carb-load the night before long runs. During runs over 90 min, take 30g carbs/hour (gels, sports drink). Refuel within 30 min after.',
+      raceDay:   'Practice race-day routine on long-run days from week ' + Math.floor(template.totalWeeks * 0.6) + ' onward: same breakfast, same gear, same fueling. Trust what works in training.'
+    },
+    topPriority: 'Get to the start line healthy. Easy runs should feel boring — that means you are doing them right.',
+    races: [],
+    generatedBy: 'local-' + templateKey,
+    generatedAt: new Date().toISOString()
+  };
+}
+
 async function submitForm() {
   // Prefer confirmed lookup; fall back to manual fields
   let distance, date, raceName;
@@ -5849,10 +6160,6 @@ async function submitForm() {
     showFormAlert('Please pick how many days per week you can train.');
     return;
   }
-  if (!SCRIPT_URL) {
-    showFormAlert('Server URL not configured.');
-    return;
-  }
 
   // Update the runner profile so future form opens are pre-filled
   runnerProfile = {
@@ -5871,43 +6178,27 @@ async function submitForm() {
 
   showView('loading');
 
+  // LOCAL plan generation — no Gemini call. Burns no quota, runs
+  // instantly, works offline. The backend coach() action is still
+  // available for future use when Gemini quota recovers, but the
+  // form no longer hits it by default.
   try {
-    const result = await postJson({
-      action: 'coach',
-      passcode: getPasscode(),
-      raceDistance: distance,
-      raceDate: date,
+    const generatedPlan = buildPlanLocally({
       raceName: raceName,
+      raceDate: date,
+      raceDistance: distance,
       weeklyMileage: mileage,
       longestRecentRun: longestRecentRun,
       goalTime: goal,
       daysPerWeek: daysPerWeek,
       longRunDay: longRunDay,
-      coachingStyle: style,
-      injuryNotes: injuryNotes,
-      strengthSchedule: strengthSchedule,
-      screenshots: uploadedFiles.map(f => f.base64)
+      injuryNotes: injuryNotes
     });
-
-    if (result.error) {
-      if (result.error === 'Unauthorized') {
-        clearPasscode();
-        showView('passcode');
-        return;
-      }
-      throw new Error(result.error);
+    if (!generatedPlan || !Array.isArray(generatedPlan.weeks) || generatedPlan.weeks.length === 0) {
+      throw new Error('Local generator returned an empty plan.');
     }
-    if (!result.result) throw new Error('Empty response');
-    // Frontend safety net — if the backend somehow returns a plan without
-    // a weeks array, refuse to save it (would render as a blank dashboard).
-    if (!Array.isArray(result.result.weeks) || result.result.weeks.length === 0) {
-      throw new Error('Plan response was missing the weeks array. Try again.');
-    }
-
-    // Override raceName if user provided one
-    if (raceName && !result.result.raceName) result.result.raceName = raceName;
-
-    savePlan(result.result);
+    // isNewPlan: true → savePlan resets planStartDate to this Monday
+    savePlan(generatedPlan, { isNewPlan: true });
     renderDashboard();
     showView('dashboard');
   } catch(e) {
