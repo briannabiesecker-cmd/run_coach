@@ -3176,9 +3176,6 @@
         <input type="date" id="race-date" value="2026-11-14" />
       </div>
     </div>
-    <!-- Hidden legacy elements preserved so old code paths don't crash -->
-    <div id="race-confirm-card" class="hidden"></div>
-    <div id="race-manual-fields" class="hidden"></div>
 
     <div class="row">
       <div class="field">
@@ -5363,7 +5360,6 @@ function resetPlan() {
   weeklyReviews = {};
   runnerProfile = {};        // wipe stale race name / mileage cache too
   uploadedFiles = [];
-  confirmedRace = null;
   // Push the now-empty state to the cloud so the sheet doesn't keep
   // serving the old plan on next hydrate
   pushToCloud();
@@ -5390,7 +5386,6 @@ function resetPlan() {
 // ════════════════════════════════════════════════════
 // RACE LOOKUP
 // ════════════════════════════════════════════════════
-let confirmedRace = null; // { name, date, distance, location } once user confirms
 
 // ════════════════════════════════════════════════════
 // ADDITIONAL RACES — add tune-up / fun races to an existing plan
@@ -5678,73 +5673,11 @@ function deleteRace(raceId) {
   }
 }
 
-async function lookupRaceClick() {
-  const name = document.getElementById('race-name').value.trim();
-  const btn  = document.getElementById('lookup-btn');
-  if (!name) {
-    showFormAlert('Enter a race name first.');
-    return;
-  }
-  btn.disabled = true;
-  btn.textContent = '…';
-  document.getElementById('race-confirm-card').classList.add('hidden');
-  document.getElementById('race-manual-fields').classList.add('hidden');
-
-  try {
-    const res = await postJson({ action: 'lookupRace', passcode: getPasscode(), raceName: name });
-    if (res.error) {
-      if (res.error === 'Unauthorized') { clearPasscode(); showView('passcode'); return; }
-      throw new Error(res.error);
-    }
-    const race = res.race;
-    if (!race || !race.found) {
-      showFormAlert("Couldn't find that race. Enter the date manually below.");
-      document.getElementById('race-manual-fields').classList.remove('hidden');
-      return;
-    }
-    showRaceConfirmCard(race);
-  } catch (e) {
-    showFormAlert('Lookup failed: ' + e.message + '. Enter manually below.');
-    document.getElementById('race-manual-fields').classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Find';
-  }
-}
-
-function showRaceConfirmCard(race) {
-  document.getElementById('race-confirm-name').textContent = race.name || 'Race';
-  const meta = [race.date, race.location, race.distance].filter(Boolean).join(' · ');
-  document.getElementById('race-confirm-meta').textContent = meta;
-  const confLabel = race.confidence === 'high' ? 'High confidence' :
-                    race.confidence === 'medium' ? 'Medium confidence — please verify the date' :
-                    'Low confidence — please verify';
-  document.getElementById('race-confirm-confidence').textContent = confLabel;
-  document.getElementById('race-confirm-card').classList.remove('hidden');
-  // stash race so confirmRaceLookup can use it
-  document.getElementById('race-confirm-card').dataset.race = JSON.stringify(race);
-}
-
-function confirmRaceLookup() {
-  const card = document.getElementById('race-confirm-card');
-  const race = JSON.parse(card.dataset.race || '{}');
-  confirmedRace = race;
-  // Hide both lookup card and manual fields
-  card.classList.add('hidden');
-  document.getElementById('race-manual-fields').classList.add('hidden');
-  // Update the race name input as a confirmation display
-  const input = document.getElementById('race-name');
-  input.value = race.name || input.value;
-  input.disabled = true;
-  document.getElementById('lookup-btn').textContent = '✓';
-  document.getElementById('lookup-btn').disabled = true;
-}
-
-function rejectRaceLookup() {
-  document.getElementById('race-confirm-card').classList.add('hidden');
-  document.getElementById('race-manual-fields').classList.remove('hidden');
-  confirmedRace = null;
-}
+// (Removed lookupRaceClick / showRaceConfirmCard / confirmRaceLookup /
+// rejectRaceLookup — race name lookup was the slow Gemini-based path
+// that we replaced with a plain text input. The setup form now takes
+// raceName as user input directly. The backend lookupRace action is
+// also removed.)
 
 // ════════════════════════════════════════════════════
 // FILE UPLOAD
@@ -6029,6 +5962,91 @@ function buildPaceZones(distance, goalTime, tier) {
   };
 }
 
+// Reshape a 4-day grid row for a different days-per-week count.
+// Input: { tueMi, wedMi, thuMi, satMi } (the 4-day defaults from the template grid)
+// Output: { mon, tue, wed, thu, fri, sat, sun } where each value is miles or 0=rest
+//
+// Day-shape rules (preserves total weekly volume as much as possible):
+//
+//   3 days/week: Tue + Thu (easy) + Sat (long). Drops Wed.
+//                Volume: tueMi + thuMi + satMi (loses wedMi)
+//
+//   4 days/week: standard novice (Tue/Wed/Thu easy + Sat long).
+//                Volume: tueMi + wedMi + thuMi + satMi (the canonical template)
+//
+//   5 days/week: Add a Sunday easy run after Saturday long.
+//                Volume: tueMi + wedMi + thuMi + satMi + (small Sunday recovery jog)
+//                Sunday is 30-50% of Tuesday's mileage (very easy after long run).
+//
+//   6 days/week: Add Friday easy + Sunday easy.
+//                Volume: + Fri easy + Sun easy
+//
+//   7 days/week: Run every day. Mon becomes easy too.
+//                Volume: + Mon easy (very short, recovery)
+//
+// Cross-training day: removed when daysPerWeek >= 5 since the runner is
+// already covering 5+ run days. Kept on Sunday for 3/4 day plans.
+function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
+  daysPerWeek = parseInt(daysPerWeek, 10) || 4;
+  if (daysPerWeek < 3) daysPerWeek = 3;
+  if (daysPerWeek > 7) daysPerWeek = 7;
+
+  const tueMi = base[0], wedMi = base[1], thuMi = base[2], satMi = base[3];
+  const minPerMi = 11.25;
+  const easy = (mi) => ({ day: '', type: 'Easy', miles: mi, note: '', estimatedDurationMin: Math.round(mi * minPerMi) });
+  const rest = ()    => ({ day: '', type: 'Rest', miles: 0,  note: '', estimatedDurationMin: 0 });
+  const cross = ()   => ({ day: '', type: 'Cross', miles: 0, note: 'Optional: bike, swim, walk — anything non-impact, 30-45 min', estimatedDurationMin: 30 });
+  const long = (mi)  => ({ day: '', type: 'Long', miles: mi, note: 'Easy pace throughout — time on feet is the goal', estimatedDurationMin: Math.round(mi * minPerMi) });
+  const race = ()    => ({ day: '', type: 'Long', miles: raceDistanceMi, note: 'RACE DAY — execute the plan, trust your training', estimatedDurationMin: Math.round(raceDistanceMi * minPerMi) });
+
+  // Start with the base 4-day shape
+  let mon = rest(), tue = easy(tueMi), wed = easy(wedMi), thu = easy(thuMi), fri = rest();
+  let sat = isRaceWeek ? rest() : long(satMi);
+  if (isRaceWeek && sat.type === 'Rest') sat.note = 'Race day tomorrow — full rest';
+  let sun = isRaceWeek ? race() : cross();
+
+  // 3 days: drop Wednesday
+  if (daysPerWeek === 3) {
+    wed = rest();
+  }
+  // 5 days: add Sunday recovery run (replace cross), keep Mon rest
+  if (daysPerWeek === 5 && !isRaceWeek) {
+    const sundayMi = Math.max(2, Math.round(tueMi * 0.5));
+    sun = easy(sundayMi);
+    sun.note = 'Recovery jog — very easy effort, the day after a long run';
+  }
+  // 6 days: add Friday easy + Sunday easy
+  if (daysPerWeek === 6 && !isRaceWeek) {
+    const friMi = Math.max(2, Math.round(tueMi * 0.6));
+    const sunMi = Math.max(2, Math.round(tueMi * 0.5));
+    fri = easy(friMi);
+    fri.note = 'Pre-long-run shakeout — very easy';
+    sun = easy(sunMi);
+    sun.note = 'Recovery jog — very easy';
+  }
+  // 7 days: also add Monday easy
+  if (daysPerWeek === 7 && !isRaceWeek) {
+    const friMi = Math.max(2, Math.round(tueMi * 0.6));
+    const sunMi = Math.max(2, Math.round(tueMi * 0.5));
+    const monMi = Math.max(2, Math.round(tueMi * 0.5));
+    mon = easy(monMi);
+    mon.note = 'Recovery from yesterday — very easy';
+    fri = easy(friMi);
+    fri.note = 'Pre-long-run shakeout';
+    sun = easy(sunMi);
+    sun.note = 'Recovery jog';
+  }
+
+  // Race week: always single race day, surrounding days are taper
+  // (already handled above by isRaceWeek branches; sat=rest, sun=race)
+
+  // Stamp the day labels
+  mon.day = 'Mon'; tue.day = 'Tue'; wed.day = 'Wed'; thu.day = 'Thu';
+  fri.day = 'Fri'; sat.day = 'Sat'; sun.day = 'Sun';
+  if (mon.type === 'Rest') mon.note = 'Recovery';
+  return [mon, tue, wed, thu, fri, sat, sun];
+}
+
 function buildPlanLocally(inputs) {
   const distanceKey = getDistanceKeyFE(inputs.raceDistance);
   const tier = inferTierFromMileage(inputs.weeklyMileage, inputs.longestRecentRun);
@@ -6042,25 +6060,13 @@ function buildPlanLocally(inputs) {
     throw new Error('No local template available for ' + distanceKey);
   }
 
-  const minPerMi = 11.25; // assumed easy pace for time estimates
+  const daysPerWeek = parseInt(inputs.daysPerWeek, 10) || 4;
   const weeks = template.grid.map(function(row) {
     const wk = row[0];
-    const tueMi = row[1], wedMi = row[2], thuMi = row[3], satMi = row[4];
     const phase = template.phaseFor(wk);
     const isRaceWeek = wk === template.totalWeeks;
-    const days = [
-      { day: 'Mon', type: 'Rest', miles: 0,     note: 'Recovery',                                              estimatedDurationMin: 0 },
-      { day: 'Tue', type: 'Easy', miles: tueMi, note: '',                                                      estimatedDurationMin: Math.round(tueMi * minPerMi) },
-      { day: 'Wed', type: 'Easy', miles: wedMi, note: '',                                                      estimatedDurationMin: Math.round(wedMi * minPerMi) },
-      { day: 'Thu', type: 'Easy', miles: thuMi, note: '',                                                      estimatedDurationMin: Math.round(thuMi * minPerMi) },
-      { day: 'Fri', type: 'Rest', miles: 0,     note: '',                                                      estimatedDurationMin: 0 },
-      isRaceWeek
-        ? { day: 'Sat', type: 'Rest', miles: 0,    note: 'Race day tomorrow — full rest',                    estimatedDurationMin: 0 }
-        : { day: 'Sat', type: 'Long', miles: satMi, note: 'Easy pace throughout — time on feet is the goal', estimatedDurationMin: Math.round(satMi * minPerMi) },
-      isRaceWeek
-        ? { day: 'Sun', type: 'Long', miles: template.raceDistanceMi, note: 'RACE DAY — execute the plan, trust your training', estimatedDurationMin: Math.round(template.raceDistanceMi * minPerMi) }
-        : { day: 'Sun', type: 'Cross', miles: 0,    note: 'Optional: bike, swim, walk — anything non-impact, 30-45 min', estimatedDurationMin: 30 }
-    ];
+    // row[1..4] = tueMi, wedMi, thuMi, satMi from the template
+    const days = reshapeWeekForDays(daysPerWeek, [row[1], row[2], row[3], row[4]], isRaceWeek, template.raceDistanceMi);
     const totalMiles = days.reduce(function(s, d) { return s + (d.miles || 0); }, 0);
     return {
       week: wk,
@@ -6122,8 +6128,7 @@ async function submitForm() {
   const injuryNotes      = document.getElementById('injury-notes').value;
 
   if (!distance || !date) {
-    showFormAlert('Please find a race or enter the date manually.');
-    document.getElementById('race-manual-fields').classList.remove('hidden');
+    showFormAlert('Please pick a race distance and enter the date.');
     return;
   }
   if (!daysPerWeek) {

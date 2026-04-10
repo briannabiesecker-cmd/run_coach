@@ -136,7 +136,6 @@ function doPost(e) {
 
     if      (action === 'verifyPasscode')     result = checkPasscode(body.passcode);
     else if (action === 'coach')              result = coach(body);
-    else if (action === 'lookupRace')         result = lookupRace(body);
     else if (action === 'weeklyReview')       result = weeklyReview(body);
     else if (action === 'parseRunScreenshot') result = parseRunScreenshot(body);
     else if (action === 'loadUserData')       result = loadUserData(body);
