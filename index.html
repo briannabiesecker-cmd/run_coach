@@ -5957,33 +5957,68 @@ const PLAN_TEMPLATE_GRIDS = {
   }
 };
 
+// Parse a goal time string into total seconds, with distance-aware
+// disambiguation for the 2-part case.
+//
+//   "4:30:00" → 3 parts → always H:MM:SS  → 16200 sec
+//   "4:30"    → 2 parts → AMBIGUOUS:
+//                          marathon/half → H:MM (4hr 30min) → 16200 sec
+//                          10K/5K        → MM:SS (4min 30s) → 270 sec
+//   "270"     → 1 part  → assume seconds
+//
+// Defense in depth: if the resulting pace is physically impossible
+// (faster than 4:00/mi or slower than 18:00/mi) we discard it and
+// fall back to the novice defaults. Better to show generic paces
+// than negative numbers.
+function parseGoalTimeToSeconds(goalTime, distanceKey) {
+  const parts = String(goalTime || '').trim().split(':').map(Number);
+  if (parts.some(p => isNaN(p))) return 0;
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2) {
+    // For races that take >1 hour at any reasonable pace (marathon, half),
+    // 2 parts means H:MM. For shorter races, 2 parts means MM:SS.
+    if (distanceKey === 'marathon' || distanceKey === 'half') {
+      return parts[0] * 3600 + parts[1] * 60;
+    }
+    return parts[0] * 60 + parts[1];
+  }
+  if (parts.length === 1) return parts[0];
+  return 0;
+}
+
 // Compute pace zones from goal time + race distance. Used as the
-// runner's training pace anchors. If goal is missing, use rough
-// novice defaults.
+// runner's training pace anchors. If goal is missing OR produces an
+// impossible pace, fall back to novice defaults.
 function buildPaceZones(distance, goalTime, tier) {
-  // Default novice paces (will be overridden if goalTime provided)
+  // Default novice paces — used unless a valid goalTime is provided
   let easyPace = '11:00–11:30/mi';
   let mPace    = '10:00/mi';
   let tPace    = '9:30/mi';
   let iPace    = '8:30/mi';
+
   if (goalTime) {
-    // Convert goal time to seconds total, then to pace per mile
-    const parts = String(goalTime).split(':').map(Number);
-    let totalSec = 0;
-    if (parts.length === 3) totalSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
-    else if (parts.length === 2) totalSec = parts[0] * 60 + parts[1];
+    const totalSec = parseGoalTimeToSeconds(goalTime, distance);
     const distMi = distance === 'marathon' ? 26.2 : distance === 'half' ? 13.1 : distance === '10k' ? 6.2 : 3.1;
     if (totalSec > 0 && distMi > 0) {
       const goalSecPerMi = totalSec / distMi;
-      const fmt = (s) => {
-        const m = Math.floor(s / 60);
-        const sec = Math.round(s % 60);
-        return m + ':' + (sec < 10 ? '0' : '') + sec;
-      };
-      mPace    = fmt(goalSecPerMi) + '/mi';
-      easyPace = fmt(goalSecPerMi + 75) + '–' + fmt(goalSecPerMi + 105) + '/mi';
-      tPace    = fmt(goalSecPerMi - 30) + '/mi';
-      iPace    = fmt(goalSecPerMi - 60) + '/mi';
+      // Sanity check: pace must be in physical-human range (4:00–18:00/mi).
+      // If outside, the input was probably misformatted (e.g. "4:30" for
+      // a marathon parsed as 4min 30sec); fall back to defaults.
+      if (goalSecPerMi >= 240 && goalSecPerMi <= 1080) {
+        const fmt = (s) => {
+          if (s < 0) return '—';
+          const m = Math.floor(s / 60);
+          const sec = Math.round(s % 60);
+          return m + ':' + (sec < 10 ? '0' : '') + sec;
+        };
+        mPace    = fmt(goalSecPerMi) + '/mi';
+        easyPace = fmt(goalSecPerMi + 75) + '–' + fmt(goalSecPerMi + 105) + '/mi';
+        tPace    = fmt(goalSecPerMi - 30) + '/mi';
+        iPace    = fmt(goalSecPerMi - 60) + '/mi';
+      }
+      // else: leave the novice defaults — the goal time was unparseable
     }
   }
   return {
