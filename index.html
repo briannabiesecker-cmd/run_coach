@@ -1307,6 +1307,24 @@
     margin-left: 6px;
     vertical-align: middle;
   }
+  /* Race day callouts */
+  .plan-workout-row.race {
+    border-left-color: #ef4444;
+    background: rgba(239,68,68,0.08);
+  }
+  .day-mini.race { background: rgba(239,68,68,0.18); border: 1px solid rgba(239,68,68,0.45); }
+  .day-cell.race { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); }
+  .pwr-race-badge {
+    font-size: 9px;
+    font-weight: 900;
+    background: rgba(239,68,68,0.2);
+    color: #fca5a5;
+    padding: 2px 6px;
+    border-radius: 6px;
+    letter-spacing: 0.6px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
 
   /* ─── Effort distribution chart (Bundle C) ─── */
   .effort-chart-card {
@@ -3052,6 +3070,20 @@
             <div class="settings-desc">Required for plan/log to sync to Google Sheets</div>
           </div>
         </button>
+        <button class="settings-item" onclick="closeSettingsMenu();openAddRaceModal();">
+          <span class="settings-icon">🏁</span>
+          <div class="settings-text">
+            <div class="settings-label">Add a race</div>
+            <div class="settings-desc">Tune-up race or fun run — auto-adjusts surrounding days</div>
+          </div>
+        </button>
+        <button class="settings-item" onclick="closeSettingsMenu();openManageRacesModal();">
+          <span class="settings-icon">📋</span>
+          <div class="settings-text">
+            <div class="settings-label">Manage races</div>
+            <div class="settings-desc">View and remove added races</div>
+          </div>
+        </button>
         <button class="settings-item" onclick="closeSettingsMenu();loadSamplePlan();">
           <span class="settings-icon">📋</span>
           <div class="settings-text">
@@ -3303,6 +3335,75 @@
 
     <div id="backfill-empty" class="hidden">
       <button class="btn-ghost" onclick="cancelBackfill()" style="margin-top:14px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═════════ ADD-RACE MODAL ═════════ -->
+  <div id="add-race-modal" class="modal-backdrop" onclick="if(event.target===this)closeAddRaceModal()">
+    <div class="modal-card" style="max-width:380px;">
+      <div class="modal-title">🏁 Add a race</div>
+      <div id="add-race-alert" class="alert error hidden" style="margin-bottom:10px;"></div>
+      <div class="field">
+        <label>Race name</label>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:6px;">
+          <input type="text" id="add-race-name" placeholder="e.g. Charlottesville 10 Miler" />
+          <button type="button" class="btn-primary" id="add-race-lookup-btn" style="padding:0 14px;width:auto;font-size:13px;" onclick="addRaceLookup()">Find</button>
+        </div>
+      </div>
+      <div id="add-race-confirm" class="card hidden" style="border:1px solid var(--accent-border);background:var(--accent-bg);padding:10px;">
+        <div style="font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Found</div>
+        <div id="add-race-confirm-name" style="font-size:14px;font-weight:800;color:var(--ink);margin-top:2px;"></div>
+        <div id="add-race-confirm-meta" style="font-size:11px;color:var(--ink-mid);margin-top:2px;"></div>
+      </div>
+      <div id="add-race-manual" class="hidden" style="font-size:11px;color:var(--ink-light);margin-top:6px;">Enter date and distance manually:</div>
+      <div id="add-race-details" class="hidden">
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="add-race-date" />
+          </div>
+          <div class="field">
+            <label>Distance</label>
+            <select id="add-race-distance">
+              <option value="">Auto</option>
+              <option value="5K">5K</option>
+              <option value="10K">10K</option>
+              <option value="Half Marathon">Half Marathon</option>
+              <option value="Marathon">Marathon</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Type</label>
+            <select id="add-race-type">
+              <option value="B">B — Tune-up</option>
+              <option value="C">C — Fun run</option>
+              <option value="A">A — Peak goal</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Goal time (optional)</label>
+            <input type="text" id="add-race-goal" placeholder="1:45:00" />
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--ink-light);margin-top:4px;line-height:1.4;">
+          <strong>B:</strong> small taper before, easy day after.
+          <strong>C:</strong> no adjustment.
+          <strong>A:</strong> hard taper + recovery.
+        </div>
+      </div>
+      <button class="btn-primary" onclick="submitAddRace()" style="margin-top:14px;">Add race & adjust plan</button>
+      <button class="btn-ghost" onclick="closeAddRaceModal()" style="margin-top:8px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═════════ MANAGE-RACES MODAL ═════════ -->
+  <div id="manage-races-modal" class="modal-backdrop" onclick="if(event.target===this)closeManageRacesModal()">
+    <div class="modal-card" style="max-width:380px;">
+      <div class="modal-title">🏁 Manage races</div>
+      <div id="manage-races-list"></div>
+      <button class="btn-ghost" onclick="closeManageRacesModal()" style="margin-top:14px;">Close</button>
     </div>
   </div>
 
@@ -3561,6 +3662,7 @@ const TYPE_ICONS = {
   'Strides': '💨',
   'Rest': '💤',
   'Cross': '🧘',
+  'Race': '🏁',
 };
 
 // ════════════════════════════════════════════════════
@@ -4173,6 +4275,9 @@ function loadPlan() {
     wellness = data.wellness || {};
     weeklyReviews = data.weeklyReviews || {};
     runnerProfile = data.runnerProfile || {};
+    // Initialize the additional-races array if missing (for plans
+    // generated before the races feature shipped)
+    if (!Array.isArray(plan.races)) plan.races = [];
     ensurePlanStartIsMonday(); // migrate old plans whose start wasn't a Monday
     return true;
   } catch(e) { return false; }
@@ -5330,6 +5435,292 @@ function resetPlan() {
 // ════════════════════════════════════════════════════
 let confirmedRace = null; // { name, date, distance, location } once user confirms
 
+// ════════════════════════════════════════════════════
+// ADDITIONAL RACES — add tune-up / fun races to an existing plan
+// ════════════════════════════════════════════════════
+//
+// Plans get a `races` array of {id, name, date, distance, type, goalTime,
+// originalDays} entries. The plan is mutated when a race is added (race
+// day replaces the planned workout, day-before/day-after may be softened
+// depending on race type). The originalDays backup lets us undo cleanly
+// when a race is deleted.
+//
+// Race types and their adjustments:
+//   A — peak goal race, taper hard before, recover hard after
+//        (rare for added races — your goal is already in plan.raceName)
+//   B — tune-up race, modest pre-taper + recovery (most common case)
+//   C — shake-out / fun run, no adjustment
+
+let raceFormState = { lookupBusy: false, confirmedRace: null };
+
+// Find the {weekIdx, dayIdx} matching a date in the plan, or null
+function findPlanDayForDate(dateISO) {
+  if (!plan || !plan.weeks || !planStartDate) return null;
+  const target = new Date(dateISO + 'T00:00:00').getTime();
+  const start = new Date(planStartDate + 'T00:00:00').getTime();
+  const dayDiff = Math.round((target - start) / 86400000);
+  if (dayDiff < 0) return null;
+  const wkIdx = Math.floor(dayDiff / 7);
+  const dayIdx = dayDiff % 7;
+  if (wkIdx >= plan.weeks.length) return null;
+  return { wkIdx, dayIdx };
+}
+
+// Apply mechanical adjustments around a race date. Mutates plan.weeks
+// directly. Returns originalDays backup so deletion can restore.
+function applyRaceToPlan(race) {
+  const loc = findPlanDayForDate(race.date);
+  if (!loc) return null;
+  const week = plan.weeks[loc.wkIdx];
+  if (!week || !week.days) return null;
+
+  const originalDays = [];
+  // Always back up the race day itself
+  const raceDay = week.days[loc.dayIdx];
+  if (raceDay) originalDays.push({ wkIdx: loc.wkIdx, dayIdx: loc.dayIdx, day: JSON.parse(JSON.stringify(raceDay)) });
+
+  // Replace race day with the race
+  week.days[loc.dayIdx] = {
+    day: raceDay.day,
+    type: 'Race',
+    miles: parseFloat(distanceToMiles(race.distance)) || 0,
+    note: '🏁 ' + race.name + (race.goalTime ? ' · goal ' + race.goalTime : ''),
+    estimatedDurationMin: race.goalTime ? parseGoalTimeToMin(race.goalTime) : 0,
+    raceRef: race.id
+  };
+
+  // Adjust adjacent days based on race type. C races skip this entirely.
+  if (race.type === 'A' || race.type === 'B') {
+    // Day before: rest if it was hard, easy short if it was easy/long
+    const beforeIdx = loc.dayIdx - 1;
+    if (beforeIdx >= 0) {
+      const before = week.days[beforeIdx];
+      if (before && before.type !== 'Rest') {
+        originalDays.push({ wkIdx: loc.wkIdx, dayIdx: beforeIdx, day: JSON.parse(JSON.stringify(before)) });
+        const isHard = ['Tempo', 'Intervals', 'Hill Repeats', 'Long'].indexOf(before.type) !== -1;
+        week.days[beforeIdx] = {
+          day: before.day,
+          type: race.type === 'A' || isHard ? 'Rest' : 'Easy',
+          miles: race.type === 'A' || isHard ? 0 : Math.min(2, before.miles || 2),
+          note: 'Pre-race shakeout (was: ' + before.type + ')',
+          estimatedDurationMin: race.type === 'A' || isHard ? 0 : 20,
+          raceAdjust: race.id
+        };
+      }
+    }
+    // Day after: rest if A race, easy short if B race
+    const afterIdx = loc.dayIdx + 1;
+    if (afterIdx < week.days.length) {
+      const after = week.days[afterIdx];
+      if (after && after.type !== 'Rest') {
+        originalDays.push({ wkIdx: loc.wkIdx, dayIdx: afterIdx, day: JSON.parse(JSON.stringify(after)) });
+        week.days[afterIdx] = {
+          day: after.day,
+          type: race.type === 'A' ? 'Rest' : 'Easy',
+          miles: race.type === 'A' ? 0 : 2,
+          note: 'Post-race recovery (was: ' + after.type + ')',
+          estimatedDurationMin: race.type === 'A' ? 0 : 20,
+          raceAdjust: race.id
+        };
+      }
+    }
+  }
+
+  // Recalculate weekly total
+  week.totalMiles = (week.days || []).reduce((sum, d) => sum + (d.miles || 0), 0);
+  return originalDays;
+}
+
+// Restore the days backed up when this race was added, then remove it.
+function removeRaceFromPlan(raceId) {
+  if (!plan.races) return false;
+  const idx = plan.races.findIndex(r => r.id === raceId);
+  if (idx === -1) return false;
+  const race = plan.races[idx];
+  if (Array.isArray(race.originalDays)) {
+    race.originalDays.forEach(o => {
+      if (plan.weeks[o.wkIdx] && plan.weeks[o.wkIdx].days) {
+        plan.weeks[o.wkIdx].days[o.dayIdx] = o.day;
+        // Recalculate that week's total
+        const w = plan.weeks[o.wkIdx];
+        w.totalMiles = w.days.reduce((s, d) => s + (d.miles || 0), 0);
+      }
+    });
+  }
+  plan.races.splice(idx, 1);
+  return true;
+}
+
+// Helper: convert race distance label to approximate miles
+function distanceToMiles(dist) {
+  const s = String(dist || '').toLowerCase();
+  if (s.indexOf('marathon') !== -1 && s.indexOf('half') !== -1) return 13.1;
+  if (s.indexOf('marathon') !== -1) return 26.2;
+  if (s.indexOf('half') !== -1) return 13.1;
+  if (s.indexOf('10k') !== -1) return 6.2;
+  if (s.indexOf('5k') !== -1) return 3.1;
+  return 0;
+}
+
+// Helper: parse goalTime "1:45:00" → minutes
+function parseGoalTimeToMin(goalTime) {
+  if (!goalTime) return 0;
+  const parts = String(goalTime).split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 60 + parts[1] + Math.round(parts[2] / 60);
+  if (parts.length === 2) return parts[0] + Math.round(parts[1] / 60);
+  return parseInt(goalTime, 10) || 0;
+}
+
+// Find any race scheduled for a given date, or null
+function getRaceForDate(dateISO) {
+  if (!plan || !plan.races) return null;
+  return plan.races.find(r => r.date === dateISO) || null;
+}
+
+// ─── Add-race modal ───────────────────────────────
+function openAddRaceModal() {
+  raceFormState = { lookupBusy: false, confirmedRace: null };
+  document.getElementById('add-race-modal').classList.add('open');
+  // Reset form
+  document.getElementById('add-race-name').value = '';
+  document.getElementById('add-race-confirm').classList.add('hidden');
+  document.getElementById('add-race-manual').classList.add('hidden');
+  document.getElementById('add-race-details').classList.add('hidden');
+  document.getElementById('add-race-alert').classList.add('hidden');
+  document.getElementById('add-race-name').focus();
+}
+
+function closeAddRaceModal() {
+  document.getElementById('add-race-modal').classList.remove('open');
+}
+
+async function addRaceLookup() {
+  const name = document.getElementById('add-race-name').value.trim();
+  if (!name) { showAddRaceAlert('Enter a race name first.'); return; }
+  if (raceFormState.lookupBusy) return;
+  raceFormState.lookupBusy = true;
+  const btn = document.getElementById('add-race-lookup-btn');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res = await postJson({ action: 'lookupRace', passcode: getPasscode(), raceName: name });
+    if (res.error) throw new Error(res.error);
+    if (!res.race || !res.race.found) {
+      showAddRaceAlert('Did not recognize that race. Enter details manually below.');
+      document.getElementById('add-race-manual').classList.remove('hidden');
+      document.getElementById('add-race-details').classList.remove('hidden');
+      raceFormState.confirmedRace = { name: name, date: '', distance: '' };
+    } else {
+      raceFormState.confirmedRace = res.race;
+      document.getElementById('add-race-confirm-name').textContent = res.race.name;
+      document.getElementById('add-race-confirm-meta').textContent =
+        (res.race.distance || '') + (res.race.date ? ' · ' + res.race.date : '') + (res.race.location ? ' · ' + res.race.location : '');
+      document.getElementById('add-race-confirm').classList.remove('hidden');
+      document.getElementById('add-race-details').classList.remove('hidden');
+    }
+  } catch (e) {
+    showAddRaceAlert('Lookup failed: ' + e.message);
+  } finally {
+    raceFormState.lookupBusy = false;
+    btn.disabled = false; btn.textContent = 'Find';
+  }
+}
+
+function showAddRaceAlert(msg) {
+  const el = document.getElementById('add-race-alert');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function submitAddRace() {
+  const r = raceFormState.confirmedRace;
+  if (!r) { showAddRaceAlert('Look up the race first.'); return; }
+  // Read the form fields (allow manual override of date/distance)
+  const dateInput = document.getElementById('add-race-date').value;
+  const distInput = document.getElementById('add-race-distance').value;
+  const typeInput = document.getElementById('add-race-type').value;
+  const goalInput = document.getElementById('add-race-goal').value.trim();
+  const date = dateInput || r.date;
+  const distance = distInput || r.distance;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { showAddRaceAlert('Date must be YYYY-MM-DD.'); return; }
+  if (!distance) { showAddRaceAlert('Pick a distance.'); return; }
+  if (!typeInput) { showAddRaceAlert('Pick a race type.'); return; }
+
+  // Validate the date is within the plan range
+  const loc = findPlanDayForDate(date);
+  if (!loc) {
+    showAddRaceAlert('That date is outside your current plan range. Cannot add.');
+    return;
+  }
+  // No duplicate races on the same day
+  if (getRaceForDate(date)) {
+    showAddRaceAlert('There is already a race on that date.');
+    return;
+  }
+
+  // Build the race object
+  const race = {
+    id: 'r_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    name: r.name,
+    date: date,
+    distance: distance,
+    type: typeInput,
+    goalTime: goalInput,
+    addedAt: new Date().toISOString()
+  };
+
+  // Apply the mechanical adjustments and stash backups
+  const originalDays = applyRaceToPlan(race);
+  if (!originalDays) {
+    showAddRaceAlert('Failed to apply race to plan.');
+    return;
+  }
+  race.originalDays = originalDays;
+
+  // Append to races list and persist
+  if (!Array.isArray(plan.races)) plan.races = [];
+  plan.races.push(race);
+  savePlan(plan);
+
+  closeAddRaceModal();
+  renderDashboard();
+  // Open the workout detail sheet for the race so user sees what was applied
+  setTimeout(() => openWorkoutDetail(loc.wkIdx, loc.dayIdx), 100);
+}
+
+// ─── Manage-races modal ───────────────────────────
+function openManageRacesModal() {
+  const races = (plan && plan.races) || [];
+  const listEl = document.getElementById('manage-races-list');
+  if (!races.length) {
+    listEl.innerHTML = '<div style="font-size:13px;color:var(--ink-light);text-align:center;padding:20px;">No additional races yet. Tap "Add a race" in Settings to add one.</div>';
+  } else {
+    listEl.innerHTML = races.map(r => {
+      const typeLabel = r.type === 'A' ? 'Goal race' : r.type === 'B' ? 'Tune-up' : 'Fun run';
+      return `
+        <div style="background:var(--bg-elev-2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;">
+          <div style="font-weight:800;color:var(--ink);">🏁 ${escape(r.name)}</div>
+          <div style="font-size:11px;color:var(--ink-mid);margin-top:2px;">${escape(r.distance)} · ${escape(r.date)} · ${typeLabel}${r.goalTime ? ' · goal ' + escape(r.goalTime) : ''}</div>
+          <button class="btn-ghost" style="margin-top:8px;font-size:12px;padding:6px 10px;" onclick="deleteRace('${r.id}')">Remove this race</button>
+        </div>`;
+    }).join('');
+  }
+  document.getElementById('manage-races-modal').classList.add('open');
+}
+
+function closeManageRacesModal() {
+  document.getElementById('manage-races-modal').classList.remove('open');
+}
+
+function deleteRace(raceId) {
+  if (!confirm('Remove this race? Adjacent days will be restored to their original state.')) return;
+  const ok = removeRaceFromPlan(raceId);
+  if (ok) {
+    savePlan(plan);
+    renderDashboard();
+    openManageRacesModal(); // refresh the list
+  }
+}
+
 async function lookupRaceClick() {
   const name = document.getElementById('race-name').value.trim();
   const btn  = document.getElementById('lookup-btn');
@@ -6298,7 +6689,8 @@ function renderHome() {
     const stripLongRunIdx = findLongRunDayIdx(week);
     const cells = week.days.map((d, i) => {
       const isToday = i === dayIdx;
-      const isLong = i === stripLongRunIdx && d.type !== 'Rest' && d.miles;
+      const isRace = d.type === 'Race';
+      const isLong = i === stripLongRunIdx && d.type !== 'Rest' && d.miles && !isRace;
       let hasActualRun = false;
       if (planStartDate) {
         const dt = new Date(planStartDate + 'T00:00:00');
@@ -6309,7 +6701,8 @@ function renderHome() {
       }
       const stateClass = isToday ? ' today' : (hasActualRun ? ' done' : '');
       const longClass = isLong ? ' long-run' : '';
-      const cellClass = 'day-cell' + stateClass + longClass;
+      const raceClass = isRace ? ' race' : '';
+      const cellClass = 'day-cell' + stateClass + longClass + raceClass;
       const icon = TYPE_ICONS[d.type] || '—';
       const dayShort = DAYS_FULL[i];
       const hasStrength = getStrengthForDay(dayShort).length > 0;
@@ -6527,11 +6920,56 @@ function openWorkoutDetail(weekIdx, dayIdx) {
       </div>`;
   }
 
-  // Actions — depend on whether this is the current week
+  // Race-day extras: if this day matches an entry in plan.races, show
+  // the race info block with type/goal/remove option
+  let raceBlock = '';
+  const isRace = day.type === 'Race';
+  let raceObj = null;
+  if (isRace) {
+    raceObj = (plan.races || []).find(r => r.id === day.raceRef) || null;
+    if (raceObj) {
+      const typeLabel = raceObj.type === 'A' ? 'A — Peak goal race' : raceObj.type === 'B' ? 'B — Tune-up race' : 'C — Fun run / shake-out';
+      raceBlock = `
+        <div class="wd-section">
+          <div class="wd-section-label">🏁 Race details</div>
+          <div class="wd-section-body">
+            <strong>${escape(raceObj.name)}</strong><br>
+            ${escape(raceObj.distance)} · ${typeLabel}
+            ${raceObj.goalTime ? '<br>Goal time: ' + escape(raceObj.goalTime) : ''}
+          </div>
+        </div>`;
+    }
+  }
+  // If a nearby day was adjusted FOR a race, surface that too
+  let raceAdjustBlock = '';
+  if (day.raceAdjust) {
+    const adjRace = (plan.races || []).find(r => r.id === day.raceAdjust);
+    if (adjRace) {
+      raceAdjustBlock = `
+        <div class="wd-section">
+          <div class="wd-section-label">⚠ Adjusted for nearby race</div>
+          <div class="wd-section-body">
+            This day was softened because of <strong>${escape(adjRace.name)}</strong> on ${escape(adjRace.date)}.
+            Removing the race will restore the original workout.
+          </div>
+        </div>`;
+    }
+  }
+
+  // Actions — depend on whether this is the current week + race state
   const isCurrentWeek = weekIdx === getCurrentWeekIndex();
   const isToday = isCurrentWeek && dayIdx === getCurrentDayIndex();
   let actionsHTML = '';
-  if (isToday && !isRest) {
+  if (isRace && raceObj) {
+    // Race day actions: log + remove + close
+    var logBtn = isToday ? `<button class="wd-action primary" onclick="closeWorkoutDetail();openCheckInForm('run')">Log race result</button>` : '';
+    actionsHTML = `
+      <div class="wd-actions">
+        ${logBtn}
+        <button class="wd-action" onclick="closeWorkoutDetail();deleteRace('${raceObj.id}')">Remove race</button>
+        <button class="wd-action" onclick="closeWorkoutDetail()">Close</button>
+      </div>`;
+  } else if (isToday && !isRest) {
     actionsHTML = `
       <div class="wd-actions">
         <button class="wd-action primary" onclick="closeWorkoutDetail();openCheckInForm('run')">Log this workout</button>
@@ -6551,13 +6989,19 @@ function openWorkoutDetail(weekIdx, dayIdx) {
       </div>`;
   }
 
+  const titleText = isRace && raceObj
+    ? escape(raceObj.name)
+    : (isRest ? 'Rest day' : escape(day.type));
+
   const html = `
     <div class="wd-tag">${dayName}${dateLabel ? ' · ' + dateLabel : ''} · Week ${week.week}</div>
     <div class="wd-headline-row">
       <span class="wd-headline-icon">${icon}</span>
-      <div class="wd-title">${isRest ? 'Rest day' : escape(day.type)}</div>
+      <div class="wd-title">${titleText}</div>
     </div>
     ${pills.length ? `<div class="wd-meta">${pills.join('')}</div>` : ''}
+    ${raceBlock}
+    ${raceAdjustBlock}
     ${segmentsBlock}
     ${intentBlock}
     ${noteBlock}
@@ -6621,14 +7065,16 @@ function renderPlan() {
   const todayDayIdx = getCurrentDayIndex();
   const days = (week.days || []).map((d, i) => {
     const isRest = d.type === 'Rest' || !d.miles;
+    const isRace = d.type === 'Race';
     const dayShort = DAYS_FULL[i];
     const hasStrength = getStrengthForDay(dayShort).length > 0;
     const strMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
-    const onClick = isCurrentWeek ? `onclick="openSwapModal(${i})"` : '';
+    const onClick = `onclick="openWorkoutDetail(${wkIdx}, ${i})"`;
     const isToday = isCurrentWeek && i === todayDayIdx;
-    const isLong = i === longRunIdx && !isRest;
-    const miniClasses = ['day-mini', isRest && 'rest', isToday && 'today', isLong && 'long-run'].filter(Boolean).join(' ');
-    return `<div class="${miniClasses}" ${onClick}><div class="label">${dayLabels[i]}</div><div class="val">${isRest ? '—' : d.miles}</div>${strMark}</div>`;
+    const isLong = i === longRunIdx && !isRest && !isRace;
+    const miniClasses = ['day-mini', isRest && 'rest', isToday && 'today', isLong && 'long-run', isRace && 'race'].filter(Boolean).join(' ');
+    const valHtml = isRace ? '🏁' : (isRest ? '—' : d.miles);
+    return `<div class="${miniClasses}" ${onClick}><div class="label">${dayLabels[i]}</div><div class="val">${valHtml}</div>${strMark}</div>`;
   }).join('');
   const strengthPill = totalStrengthSessions > 0
     ? `<span class="week-pill" style="background:rgba(168,85,247,0.2);color:#c4b5fd;">💪 ${totalStrengthSessions}x</span>`
@@ -6709,11 +7155,13 @@ function renderPlan() {
     // explanation). Past weeks are tappable too — just no edit actions.
     const onClick = `onclick="openWorkoutDetail(${wkIdx}, ${i})"`;
 
+    const isRace = d.type === 'Race';
     const rowClasses = [
       'plan-workout-row',
       isToday && 'today',
       isLong && !stateClass && 'long-run',
       isRest && 'rest',
+      isRace && 'race',
       stateClass
     ].filter(Boolean).join(' ');
 
