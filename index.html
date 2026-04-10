@@ -1307,6 +1307,225 @@
     margin-left: 6px;
     vertical-align: middle;
   }
+
+  /* ─── Effort distribution chart (Bundle C) ─── */
+  .effort-chart-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .effort-chart-label {
+    font-size: 10px;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 800;
+    margin-bottom: 8px;
+  }
+  .effort-chart-bar {
+    display: flex;
+    width: 100%;
+    height: 14px;
+    border-radius: 7px;
+    overflow: hidden;
+    background: var(--bg-elev-2);
+    margin-bottom: 8px;
+  }
+  .effort-seg {
+    height: 100%;
+    transition: width 0.3s ease;
+  }
+  .effort-seg.easy     { background: #10b981; }
+  .effort-seg.long     { background: #14b8a6; }
+  .effort-seg.marathon { background: #f59e0b; }
+  .effort-seg.tempo    { background: #ef4444; }
+  .effort-seg.interval { background: #ec4899; }
+  .effort-seg.cross    { background: #8b5cf6; }
+  .effort-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 10px;
+    color: var(--ink-mid);
+  }
+  .effort-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .effort-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+  .effort-eighty-twenty {
+    font-size: 10px;
+    color: var(--ink-light);
+    margin-top: 6px;
+    font-style: italic;
+  }
+  .effort-eighty-twenty.balanced { color: var(--accent); }
+  .effort-eighty-twenty.unbalanced { color: #fbbf24; }
+
+  /* ─── Workout detail bottom sheet (Bundle C) ─── */
+  .wd-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 999;
+    display: none;
+    animation: wd-fade 0.18s ease;
+  }
+  .wd-backdrop.open { display: block; }
+  @keyframes wd-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .wd-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    width: 100%;
+    max-width: 430px;
+    background: var(--bg-elev);
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    z-index: 1000;
+    max-height: 85vh;
+    overflow-y: auto;
+    transition: transform 0.22s ease;
+  }
+  .wd-sheet.open {
+    transform: translateX(-50%) translateY(0);
+  }
+  .wd-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--ink-faint);
+    border-radius: 2px;
+    margin: 10px auto 6px;
+  }
+  .wd-content { padding: 6px 22px 22px; }
+  .wd-tag {
+    font-size: 10px;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .wd-title {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1.15;
+  }
+  .wd-headline-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .wd-headline-icon { font-size: 28px; }
+  .wd-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .wd-meta-pill {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .wd-meta-pill .label {
+    color: var(--ink-light);
+    font-size: 10px;
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+  .wd-section { margin-top: 16px; }
+  .wd-section-label {
+    font-size: 11px;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .wd-section-body {
+    font-size: 13px;
+    color: var(--ink-mid);
+    line-height: 1.55;
+  }
+  .wd-segments {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .wd-segment {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    background: var(--bg-elev-2);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+  .wd-segment.warmup   { border-left-color: #14b8a6; }
+  .wd-segment.main     { border-left-color: #ef4444; }
+  .wd-segment.recovery { border-left-color: #facc15; }
+  .wd-segment.cooldown { border-left-color: #8b5cf6; }
+  .wd-segment .part {
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--ink-light);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    width: 60px;
+  }
+  .wd-segment .body {
+    flex: 1;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .wd-segment .note {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-mid);
+    margin-top: 2px;
+  }
+  .wd-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .wd-action {
+    flex: 1;
+    min-width: 100px;
+    padding: 12px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    border: 1px solid var(--border);
+    background: var(--bg-elev-2);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .wd-action.primary {
+    background: var(--accent);
+    color: #0a1628;
+    border-color: var(--accent);
+  }
+  .wd-action:hover { opacity: 0.9; }
   /* Workout segments (PG-1: warmup/main/recovery/cooldown) */
   .pwr-segments {
     margin-top: 8px;
@@ -3085,6 +3304,13 @@
     <div id="backfill-empty" class="hidden">
       <button class="btn-ghost" onclick="cancelBackfill()" style="margin-top:14px;">Cancel</button>
     </div>
+  </div>
+
+  <!-- ═════════ WORKOUT DETAIL BOTTOM SHEET (Bundle C) ═════════ -->
+  <div id="wd-backdrop" class="wd-backdrop" onclick="closeWorkoutDetail()"></div>
+  <div id="wd-sheet" class="wd-sheet">
+    <div class="wd-handle"></div>
+    <div id="wd-content" class="wd-content"></div>
   </div>
 
   <!-- ═════════ STRENGTH EDIT VIEW ═════════ -->
@@ -6178,6 +6404,177 @@ function navWeek(delta) {
   renderPlan();
 }
 
+// ─── Effort distribution chart (Bundle C) ───
+//
+// Sums miles per workout type for the week and returns a percent
+// breakdown. Used by the Plan tab to encode the 80/20 rule visually.
+// Easy + Long together should be ~80% of total volume; quality
+// (tempo + interval) should be the remaining ~20%.
+function buildEffortDistribution(week) {
+  if (!week || !week.days) return null;
+  const buckets = { easy: 0, long: 0, marathon: 0, tempo: 0, interval: 0, cross: 0 };
+  let total = 0;
+  week.days.forEach(d => {
+    const mi = d.miles || 0;
+    if (mi <= 0) return;
+    total += mi;
+    const t = d.type;
+    if (t === 'Easy' || t === 'Strides') buckets.easy += mi;
+    else if (t === 'Long')               buckets.long += mi;
+    else if (t === 'Tempo')              buckets.tempo += mi;
+    else if (t === 'Intervals' || t === 'Hill Repeats') buckets.interval += mi;
+    else if (t === 'Cross')              buckets.cross += mi;
+    else                                 buckets.easy += mi; // unknown → easy
+  });
+  if (total === 0) return null;
+  const pct = {};
+  Object.keys(buckets).forEach(k => {
+    pct[k] = Math.round((buckets[k] / total) * 100);
+  });
+  // Easy + Long is the "aerobic" bucket; tempo + interval is "quality".
+  // 80/20 target: aerobic ≥ 75%.
+  const aerobicPct = pct.easy + pct.long;
+  const qualityPct = pct.tempo + pct.interval;
+  return { pct: pct, total: total, aerobicPct: aerobicPct, qualityPct: qualityPct };
+}
+
+// ─── Workout detail bottom sheet (Bundle C) ───
+//
+// Renders a slide-up sheet with the full workout breakdown for the
+// selected day: type, miles, pace target, estimated duration, segments
+// (warmup/main/recovery/cooldown), strength session if scheduled,
+// and action buttons (Log workout, Swap day, Close).
+//
+// Triggered from any tap on a plan-workout-row OR from the hero card
+// "Details" affordance.
+function openWorkoutDetail(weekIdx, dayIdx) {
+  if (!plan || !plan.weeks || !plan.weeks[weekIdx]) return;
+  const week = plan.weeks[weekIdx];
+  const day = week.days && week.days[dayIdx];
+  if (!day) return;
+
+  const isRest = day.type === 'Rest' || !day.miles;
+  const icon = TYPE_ICONS[day.type] || (isRest ? '💤' : '🏃');
+  const dayLabels = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const dayName = dayLabels[dayIdx] || day.day;
+
+  // Date label if we can compute it
+  let dateLabel = '';
+  if (planStartDate) {
+    const dt = new Date(planStartDate + 'T00:00:00');
+    dt.setDate(dt.getDate() + weekIdx * 7 + dayIdx);
+    dateLabel = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // Pace + duration
+  const pace = !isRest ? getPaceForWorkout(day.type) : '';
+  let durMin = day.estimatedDurationMin;
+  if (!durMin && pace && day.miles) {
+    const paceMid = parsePaceMinutes(pace);
+    if (paceMid) durMin = Math.round(paceMid * day.miles);
+  }
+
+  // Build pill metadata
+  const pills = [];
+  if (day.miles) pills.push(`<div class="wd-meta-pill"><span class="label">Miles</span>${day.miles}</div>`);
+  if (durMin)    pills.push(`<div class="wd-meta-pill"><span class="label">Time</span>~${durMin} min</div>`);
+  if (pace)      pills.push(`<div class="wd-meta-pill"><span class="label">Pace</span>${escape(pace)}</div>`);
+
+  // Strength on this day
+  const dayShort = DAYS_FULL[dayIdx];
+  const dayStrength = getStrengthForDay(dayShort);
+  const strengthBlock = dayStrength.length ? `
+    <div class="wd-section">
+      <div class="wd-section-label">💪 Strength session</div>
+      <div class="wd-section-body">
+        ${dayStrength.map(s => `${escape(s.time || '')} — ${escape(s.label || 'Strength')}`).join('<br>')}
+      </div>
+    </div>` : '';
+
+  // Coach intent
+  const intent = INTENTION_LIB[day.type];
+  const intentBlock = intent ? `
+    <div class="wd-section">
+      <div class="wd-section-label">The point</div>
+      <div class="wd-section-body">${escape(intent.purpose)}</div>
+    </div>
+    <div class="wd-section">
+      <div class="wd-section-label">How it should feel</div>
+      <div class="wd-section-body">${escape(intent.feel)}</div>
+    </div>` : '';
+
+  // Plan note
+  const noteBlock = day.note ? `
+    <div class="wd-section">
+      <div class="wd-section-label">Coach note</div>
+      <div class="wd-section-body">${escape(day.note)}</div>
+    </div>` : '';
+
+  // Segments
+  let segmentsBlock = '';
+  if (Array.isArray(day.segments) && day.segments.length > 0) {
+    const segItems = day.segments.map(seg => {
+      const partClass = seg.part || '';
+      const milesLabel = seg.miles ? `<strong>${seg.miles} mi</strong>` : '';
+      const paceLabel = seg.paceTarget ? ` @ ${escape(seg.paceTarget)}` : '';
+      const noteHtml = seg.note ? `<span class="note">${escape(seg.note)}</span>` : '';
+      return `<div class="wd-segment ${partClass}"><span class="part">${escape(seg.part || '')}</span><div class="body">${milesLabel}${paceLabel}${noteHtml}</div></div>`;
+    }).join('');
+    segmentsBlock = `
+      <div class="wd-section">
+        <div class="wd-section-label">Workout structure</div>
+        <div class="wd-segments">${segItems}</div>
+      </div>`;
+  }
+
+  // Actions — depend on whether this is the current week
+  const isCurrentWeek = weekIdx === getCurrentWeekIndex();
+  const isToday = isCurrentWeek && dayIdx === getCurrentDayIndex();
+  let actionsHTML = '';
+  if (isToday && !isRest) {
+    actionsHTML = `
+      <div class="wd-actions">
+        <button class="wd-action primary" onclick="closeWorkoutDetail();openCheckInForm('run')">Log this workout</button>
+        <button class="wd-action" onclick="closeWorkoutDetail();openSwapModal(${dayIdx})">Swap day</button>
+        <button class="wd-action" onclick="closeWorkoutDetail()">Close</button>
+      </div>`;
+  } else if (isCurrentWeek && !isRest) {
+    actionsHTML = `
+      <div class="wd-actions">
+        <button class="wd-action" onclick="closeWorkoutDetail();openSwapModal(${dayIdx})">Swap day</button>
+        <button class="wd-action" onclick="closeWorkoutDetail()">Close</button>
+      </div>`;
+  } else {
+    actionsHTML = `
+      <div class="wd-actions">
+        <button class="wd-action" onclick="closeWorkoutDetail()">Close</button>
+      </div>`;
+  }
+
+  const html = `
+    <div class="wd-tag">${dayName}${dateLabel ? ' · ' + dateLabel : ''} · Week ${week.week}</div>
+    <div class="wd-headline-row">
+      <span class="wd-headline-icon">${icon}</span>
+      <div class="wd-title">${isRest ? 'Rest day' : escape(day.type)}</div>
+    </div>
+    ${pills.length ? `<div class="wd-meta">${pills.join('')}</div>` : ''}
+    ${segmentsBlock}
+    ${intentBlock}
+    ${noteBlock}
+    ${strengthBlock}
+    ${actionsHTML}
+  `;
+
+  document.getElementById('wd-content').innerHTML = html;
+  document.getElementById('wd-backdrop').classList.add('open');
+  document.getElementById('wd-sheet').classList.add('open');
+}
+
+function closeWorkoutDetail() {
+  document.getElementById('wd-backdrop').classList.remove('open');
+  document.getElementById('wd-sheet').classList.remove('open');
+}
+
 function renderPlan() {
   if (!plan || !plan.weeks) return;
   const weeks = plan.weeks;
@@ -6307,7 +6704,10 @@ function renderPlan() {
       }).join('') + '</div>';
     }
 
-    const onClick = isCurrentWeek && !isRest ? `onclick="openSwapModal(${i})"` : '';
+    // Tap any row → open the workout detail bottom sheet (Bundle C).
+    // Restful days are still tappable (the sheet shows the "Recovery"
+    // explanation). Past weeks are tappable too — just no edit actions.
+    const onClick = `onclick="openWorkoutDetail(${wkIdx}, ${i})"`;
 
     const rowClasses = [
       'plan-workout-row',
@@ -6330,6 +6730,37 @@ function renderPlan() {
       </div>`;
   }).join('');
 
+  // Effort distribution chart (Bundle C) — encodes the 80/20 rule visually
+  const effort = buildEffortDistribution(week);
+  let effortHTML = '';
+  if (effort && effort.total > 0) {
+    const segs = [];
+    if (effort.pct.easy)     segs.push(`<div class="effort-seg easy"     style="width:${effort.pct.easy}%"></div>`);
+    if (effort.pct.long)     segs.push(`<div class="effort-seg long"     style="width:${effort.pct.long}%"></div>`);
+    if (effort.pct.marathon) segs.push(`<div class="effort-seg marathon" style="width:${effort.pct.marathon}%"></div>`);
+    if (effort.pct.tempo)    segs.push(`<div class="effort-seg tempo"    style="width:${effort.pct.tempo}%"></div>`);
+    if (effort.pct.interval) segs.push(`<div class="effort-seg interval" style="width:${effort.pct.interval}%"></div>`);
+    if (effort.pct.cross)    segs.push(`<div class="effort-seg cross"    style="width:${effort.pct.cross}%"></div>`);
+    const legend = [];
+    if (effort.pct.easy)     legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#10b981"></div>Easy ${effort.pct.easy}%</div>`);
+    if (effort.pct.long)     legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#14b8a6"></div>Long ${effort.pct.long}%</div>`);
+    if (effort.pct.marathon) legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#f59e0b"></div>MP ${effort.pct.marathon}%</div>`);
+    if (effort.pct.tempo)    legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#ef4444"></div>Tempo ${effort.pct.tempo}%</div>`);
+    if (effort.pct.interval) legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#ec4899"></div>Interval ${effort.pct.interval}%</div>`);
+    if (effort.pct.cross)    legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#8b5cf6"></div>Cross ${effort.pct.cross}%</div>`);
+    const balanced = effort.aerobicPct >= 75;
+    const ratioText = balanced
+      ? `✓ ${effort.aerobicPct}% aerobic, ${effort.qualityPct}% quality — balanced 80/20`
+      : `⚠ ${effort.aerobicPct}% aerobic, ${effort.qualityPct}% quality — heavy on intensity for this tier`;
+    effortHTML = `
+      <div class="effort-chart-card">
+        <div class="effort-chart-label">Effort distribution · ${effort.total} mi total</div>
+        <div class="effort-chart-bar">${segs.join('')}</div>
+        <div class="effort-legend">${legend.join('')}</div>
+        <div class="effort-eighty-twenty ${balanced ? 'balanced' : 'unbalanced'}">${ratioText}</div>
+      </div>`;
+  }
+
   document.getElementById('plan-week-detail').innerHTML = `
     <div class="week-card${isCurrentWeek ? ' current' : ''}">
       <div class="week-card-head">
@@ -6345,8 +6776,9 @@ function renderPlan() {
         </div>
       </div>
       <div class="day-mini-grid">${days}</div>
-      ${isCurrentWeek ? '<div class="swap-hint">Tap a day to swap workouts</div>' : ''}
+      ${isCurrentWeek ? '<div class="swap-hint">Tap a day to see details or swap</div>' : ''}
     </div>
+    ${effortHTML}
     <div class="plan-workout-list-label">This week's workouts</div>
     <div class="plan-workout-list">${workoutListRows}</div>`;
 
