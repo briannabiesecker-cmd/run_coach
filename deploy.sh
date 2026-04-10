@@ -74,18 +74,52 @@ if [ -z "$SCRIPT_URL_RESOLVED" ]; then
   exit 0
 fi
 
-echo "→ [3/3] Smoke test: GET ?action=ping..."
-RESPONSE=$(curl -sL --max-time 30 "$SCRIPT_URL_RESOLVED?action=ping&callback=cb")
+echo "→ [3/3] Smoke test (GET + POST)..."
 
-# Strip the JSONP wrapper: cb({"ok":true,...}) → {"ok":true,...}
+# GET smoke test: ?action=ping returns version info
+RESPONSE=$(curl -sL --max-time 30 "$SCRIPT_URL_RESOLVED?action=ping&callback=cb")
 JSON=$(echo "$RESPONSE" | sed -E 's/^cb\((.*)\);?$/\1/')
 
-if echo "$JSON" | grep -q '"ok":true'; then
-  VERSION=$(echo "$JSON" | sed -nE 's/.*"version":"([^"]+)".*/\1/p')
-  echo "✓ Smoke test passed (version: $VERSION)"
-  echo "✓ Deployment is live at: $SCRIPT_URL_RESOLVED"
-else
-  echo "✗ Smoke test FAILED. Response was:"
+if ! echo "$JSON" | grep -q '"ok":true'; then
+  echo "✗ GET smoke test FAILED. Response was:"
   echo "  $RESPONSE"
   exit 3
 fi
+VERSION=$(echo "$JSON" | sed -nE 's/.*"version":"([^"]+)".*/\1/p')
+echo "  ✓ GET ?action=ping → ok (version: $VERSION)"
+
+# POST smoke test: verifyPasscode with a deliberately bad passcode.
+# This exercises the full doPost path (parse body, checkPasscode, rate
+# limit, action dispatch, logActivity, ContentService response) without
+# needing to know the real passcode in CI. Apps Script returns a 302
+# redirect to googleusercontent, which curl follows by re-issuing as
+# GET on a POST 302 (matching browser behavior with "redirect: follow").
+LOCATION=$(curl -s --max-time 30 -X POST "$SCRIPT_URL_RESOLVED" \
+  -H "Content-Type: text/plain" \
+  -d '{"action":"verifyPasscode","passcode":"smoke_test_intentionally_wrong"}' \
+  -o /dev/null -D - | grep -i "^location:" | sed 's/^[Ll]ocation: //' | tr -d '\r\n')
+
+if [ -z "$LOCATION" ]; then
+  echo "✗ POST smoke test FAILED — no redirect location returned"
+  exit 3
+fi
+
+POST_RESPONSE=$(curl -s --max-time 30 "$LOCATION")
+# Expected response: {"ok":false,"error":"Unauthorized"} — the doPost
+# path completed cleanly and returned the auth error. Any HTML response
+# means the script crashed before returning JSON (the bytes.map() class
+# of bug from 35c5547).
+if echo "$POST_RESPONSE" | grep -q '<HTML\|<html\|<!DOCTYPE'; then
+  echo "✗ POST smoke test FAILED — script returned HTML (likely runtime crash)"
+  echo "  First 300 chars: $(echo "$POST_RESPONSE" | head -c 300)"
+  exit 3
+fi
+if ! echo "$POST_RESPONSE" | grep -q '"error":"Unauthorized"'; then
+  echo "✗ POST smoke test FAILED — unexpected response:"
+  echo "  $POST_RESPONSE"
+  exit 3
+fi
+echo "  ✓ POST verifyPasscode → handled cleanly"
+
+echo "✓ All smoke tests passed"
+echo "✓ Deployment is live at: $SCRIPT_URL_RESOLVED"
