@@ -3038,6 +3038,7 @@
       <div class="brand-greeting" id="greeting">Hey runner 👋</div>
     </div>
     <div class="top-bar-actions">
+      <span id="cloud-status-pill" style="font-size:10px;font-weight:700;display:none;cursor:help;" onclick="if(lastCloudPushMessage)alert(lastCloudPushMessage)"></span>
       <div class="status-pill" id="status-pill">Setup</div>
       <button class="icon-btn" id="settings-btn" onclick="openSettingsMenu()" title="Settings">⚙</button>
     </div>
@@ -4036,14 +4037,54 @@ async function pullFromCloud() {
   }
 }
 
+// Track the last push outcome so the UI can surface failures.
+// Updated by pushToCloud on every attempt; rendered on the dashboard
+// as a small status pill near the gear icon.
+let lastCloudPushStatus = null; // null | 'syncing' | 'ok' | 'error' | 'skipped'
+let lastCloudPushMessage = '';
+let lastCloudPushAt = null;
+
+function updateCloudStatusPill() {
+  const el = document.getElementById('cloud-status-pill');
+  if (!el) return;
+  if (!lastCloudPushStatus) { el.textContent = ''; el.style.display = 'none'; return; }
+  el.style.display = 'inline-block';
+  const labels = {
+    syncing: '⟳ syncing',
+    ok:      '☁ synced',
+    error:   '⚠ sync failed',
+    skipped: '☁ offline'
+  };
+  el.textContent = labels[lastCloudPushStatus] || '';
+  el.title = lastCloudPushMessage || '';
+  el.style.color = lastCloudPushStatus === 'error' ? '#fca5a5'
+                 : lastCloudPushStatus === 'ok'    ? 'var(--accent)'
+                 : 'var(--ink-light)';
+  // Auto-fade success after 3 seconds
+  if (lastCloudPushStatus === 'ok') {
+    setTimeout(() => {
+      if (lastCloudPushStatus === 'ok') {
+        lastCloudPushStatus = null;
+        updateCloudStatusPill();
+      }
+    }, 3000);
+  }
+}
+
 async function pushToCloud() {
   const name = getUserName();
-  if (!name) return { skipped: 'no userName set' };
+  if (!name) {
+    lastCloudPushStatus = 'skipped';
+    lastCloudPushMessage = 'No userName set — cloud sync disabled until you set your name in Settings';
+    updateCloudStatusPill();
+    return { skipped: 'no userName set' };
+  }
   if (cloudSyncing) return { skipped: 'already in flight' };
   cloudSyncing = true;
+  lastCloudPushStatus = 'syncing';
+  lastCloudPushMessage = '';
+  updateCloudStatusPill();
   try {
-    // Build the payload from current in-memory state — same shape we
-    // already write to localStorage.
     const payload = {
       plan: plan,
       planStartDate: planStartDate,
@@ -4062,11 +4103,23 @@ async function pushToCloud() {
     });
     if (res.error) {
       console.warn('Cloud push failed:', res.error);
+      lastCloudPushStatus = 'error';
+      lastCloudPushMessage = res.error;
+      lastCloudPushAt = new Date().toISOString();
+      updateCloudStatusPill();
       return { error: res.error };
     }
+    lastCloudPushStatus = 'ok';
+    lastCloudPushMessage = 'Saved at ' + (res.updatedAt || 'now');
+    lastCloudPushAt = res.updatedAt || new Date().toISOString();
+    updateCloudStatusPill();
     return { ok: true, updatedAt: res.updatedAt };
   } catch (e) {
     console.warn('Cloud push error:', e.message);
+    lastCloudPushStatus = 'error';
+    lastCloudPushMessage = 'fetch failed: ' + e.message;
+    lastCloudPushAt = new Date().toISOString();
+    updateCloudStatusPill();
     return { error: 'fetch failed: ' + e.message };
   } finally {
     cloudSyncing = false;
