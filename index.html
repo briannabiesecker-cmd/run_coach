@@ -3090,11 +3090,11 @@
             <div class="settings-desc">Manage your weekly strength sessions</div>
           </div>
         </button>
-        <button class="settings-item" onclick="closeSettingsMenu();promptSetUserName();">
-          <span class="settings-icon">👋</span>
+        <button class="settings-item" onclick="closeSettingsMenu();openSwitchProfileModal();">
+          <span class="settings-icon">👤</span>
           <div class="settings-text">
-            <div class="settings-label">Set your name (cloud sync)</div>
-            <div class="settings-desc">Required for plan/log to sync to Google Sheets</div>
+            <div class="settings-label">Switch profile</div>
+            <div class="settings-desc" id="settings-current-profile">Current: —</div>
           </div>
         </button>
         <button class="settings-item" onclick="closeSettingsMenu();openAddRaceModal();">
@@ -3337,6 +3337,20 @@
 
     <div id="backfill-empty" class="hidden">
       <button class="btn-ghost" onclick="cancelBackfill()" style="margin-top:14px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═════════ SWITCH PROFILE MODAL ═════════ -->
+  <div id="switch-profile-modal" class="modal-backdrop" onclick="if(event.target===this)closeSwitchProfileModal()">
+    <div class="modal-card" style="max-width:360px;">
+      <div class="modal-title">👤 Switch profile</div>
+      <div id="switch-profile-list" style="margin-bottom:12px;">Loading…</div>
+      <div style="font-size:10px;color:var(--ink-light);text-transform:uppercase;letter-spacing:1px;font-weight:800;margin-bottom:6px;">Or create new</div>
+      <div class="field" style="margin-bottom:10px;">
+        <input type="text" id="switch-profile-new-name" autocomplete="off" placeholder="Type a new name" />
+      </div>
+      <button class="btn-primary" onclick="switchToNewProfile()">Create & switch</button>
+      <button class="btn-ghost" onclick="closeSwitchProfileModal()" style="margin-top:8px;">Cancel</button>
     </div>
   </div>
 
@@ -3910,6 +3924,95 @@ function submitName() {
 // raceName="Test Marathon" which was confusing users into thinking their
 // new plan didn't sync. One plan-generation path now: setup form →
 // buildPlanLocally.)
+
+// ─── Switch profile modal ──────────────────────────
+// Shows all existing profiles with the current one highlighted. Tap a
+// different profile → push current state, switch identity, pull new
+// profile's data, re-render everything. No data loss — both profiles
+// stay in the cloud independently.
+
+function openSwitchProfileModal() {
+  document.getElementById('switch-profile-modal').classList.add('open');
+  document.getElementById('switch-profile-new-name').value = '';
+  loadSwitchProfileList();
+}
+
+function closeSwitchProfileModal() {
+  document.getElementById('switch-profile-modal').classList.remove('open');
+}
+
+async function loadSwitchProfileList() {
+  const el = document.getElementById('switch-profile-list');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:11px;color:var(--ink-light);text-align:center;">Loading…</div>';
+  const currentName = (getUserName() || '').toLowerCase();
+  try {
+    const passcode = getPasscode();
+    if (!passcode) { el.innerHTML = ''; return; }
+    const resp = await fetch(SCRIPT_URL + '?action=listUsers&passcode=' + encodeURIComponent(passcode) + '&callback=cb');
+    const text = await resp.text();
+    const json = text.replace(/^cb\((.*)\);?\s*$/, '$1');
+    const data = JSON.parse(json);
+    if (!data.success || !data.users || !data.users.length) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--ink-light);text-align:center;padding:10px;">No profiles found.</div>';
+      return;
+    }
+    el.innerHTML = data.users.map(function(name) {
+      const display = name.charAt(0).toUpperCase() + name.slice(1);
+      const isCurrent = name.toLowerCase() === currentName;
+      const activeClass = isCurrent ? ' style="border-color:var(--accent);background:var(--accent-bg);"' : '';
+      const label = isCurrent ? display + ' <span style="font-size:10px;color:var(--accent);font-weight:700;">(current)</span>' : display;
+      return '<button class="profile-btn"' + activeClass + ' onclick="switchToProfile(\'' + name.replace(/'/g, "\\'") + '\')">' +
+             '<span class="profile-icon">🏃</span>' +
+             '<span class="profile-name">' + label + '</span>' +
+             '</button>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--ink-light);text-align:center;">Could not load profiles.</div>';
+  }
+}
+
+async function switchToProfile(name) {
+  const currentName = (getUserName() || '').toLowerCase();
+  if (name.toLowerCase() === currentName) {
+    closeSwitchProfileModal();
+    return; // already on this profile
+  }
+  // Push current state before switching so nothing is lost
+  await pushToCloud();
+  // Switch identity
+  setUserName(name);
+  // Clear local state so we pull fresh from the new profile's cloud data
+  plan = null;
+  planStartDate = null;
+  checkIns = {};
+  wellness = {};
+  weeklyReviews = {};
+  runnerProfile = {};
+  strengthSchedule = [];
+  localStorage.removeItem(STORAGE_KEY);
+  closeSwitchProfileModal();
+  // Pull the new profile's data from cloud and render
+  showView('loading');
+  await hydrateFromCloudAndRoute();
+}
+
+function switchToNewProfile() {
+  const input = document.getElementById('switch-profile-new-name');
+  const name = (input.value || '').trim();
+  if (!name) { alert('Enter a name first.'); return; }
+  if (name.length > 30) { alert('Keep it under 30 characters.'); return; }
+  switchToProfile(name);
+}
+
+// Update the Settings menu label to show current profile name
+function updateSettingsProfileLabel() {
+  const el = document.getElementById('settings-current-profile');
+  if (el) {
+    const name = getUserName();
+    el.textContent = name ? 'Current: ' + name.charAt(0).toUpperCase() + name.slice(1) : 'Not set';
+  }
+}
 
 // Settings menu entry — lets a user set or change their cloud-sync name
 // without losing their existing plan/log. Triggers an immediate push so
@@ -5025,6 +5128,7 @@ function submitManualWorkout() {
 
 function openSettingsMenu() {
   document.getElementById('settings-modal').classList.add('open');
+  updateSettingsProfileLabel();
   // Fetch today's Gemini quota usage and display it. Best-effort —
   // failures show "—" rather than blocking the menu.
   const el = document.getElementById('settings-quota-status');
