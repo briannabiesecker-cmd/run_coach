@@ -3449,8 +3449,8 @@
   <div id="view-loading" class="view hidden">
     <div class="loading-state">
       <div class="spinner"></div>
-      <div class="label">Building your training plan…</div>
-      <div class="sub">Analyzing your runs · 10–20 seconds</div>
+      <div class="label" id="loading-label">Loading…</div>
+      <div class="sub" id="loading-sub"></div>
     </div>
   </div>
 
@@ -3742,6 +3742,16 @@ function showView(name) {
   if (name === 'name') loadExistingProfiles();
 }
 
+// Set context-appropriate text on the loading spinner before showing it.
+// Different operations surface different messages.
+function showLoading(label, sub) {
+  const labelEl = document.getElementById('loading-label');
+  const subEl   = document.getElementById('loading-sub');
+  if (labelEl) labelEl.textContent = label || 'Loading…';
+  if (subEl)   subEl.textContent   = sub || '';
+  showView('loading');
+}
+
 // Fetch existing user profiles from the backend and render as tappable
 // buttons on the name screen. Best-effort — if the fetch fails (offline,
 // first-ever use, etc.) the text input is still there as a fallback.
@@ -3993,7 +4003,7 @@ async function switchToProfile(name) {
   localStorage.removeItem(STORAGE_KEY);
   closeSwitchProfileModal();
   // Pull the new profile's data from cloud and render
-  showView('loading');
+  showLoading('Switching profile…', 'Loading from cloud');
   await hydrateFromCloudAndRoute();
 }
 
@@ -4184,7 +4194,7 @@ async function pushToCloud() {
 
 // Hydrate localStorage from a cloud payload, then route to dashboard or setup.
 async function hydrateFromCloudAndRoute() {
-  showView('loading');
+  showLoading('Loading your plan…', 'Syncing from cloud');
   const cloudPayload = await pullFromCloud();
 
   if (cloudPayload && cloudPayload.plan) {
@@ -6320,7 +6330,7 @@ async function submitForm() {
   };
   saveRunnerProfile();
 
-  showView('loading');
+  showLoading('Building your plan…', 'This takes about 1 second');
 
   // LOCAL plan generation — no Gemini call. Burns no quota, runs
   // instantly, works offline. The backend coach() action is still
