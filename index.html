@@ -4394,7 +4394,17 @@ async function pushToCloud() {
 // Hydrate localStorage from a cloud payload, then route to dashboard or setup.
 async function hydrateFromCloudAndRoute() {
   showLoading('Loading your plan…', 'Syncing from cloud');
-  const cloudPayload = await pullFromCloud();
+  // Race the cloud pull against a timeout so users aren't stuck on
+  // the loading screen if Apps Script is slow or unreachable.
+  let cloudPayload = null;
+  try {
+    cloudPayload = await Promise.race([
+      pullFromCloud(),
+      new Promise(resolve => setTimeout(() => resolve(null), 8000))
+    ]);
+  } catch(e) {
+    cloudPayload = null;
+  }
 
   if (cloudPayload && cloudPayload.plan) {
     // Sheet has data — overwrite localStorage and load
@@ -9179,14 +9189,21 @@ function parseWeekRange(s) {
 // API
 // ════════════════════════════════════════════════════
 async function postJson(body) {
-  const res = await fetch(SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body),
-    redirect: 'follow'
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ════════════════════════════════════════════════════
