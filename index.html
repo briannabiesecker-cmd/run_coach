@@ -8930,7 +8930,7 @@ function renderWeeklyReviewSection() {
     el.innerHTML = `
       <div class="review-empty">
         <span class="icon">📋</span>
-        <div class="text">Log some workouts and check-ins this week, then come back for your coach's review.</div>
+        <div class="text">Your coach will review each week after it's complete. Check back after Sunday for your Week ${plan.weeks ? plan.weeks[getCurrentWeekIndex()].week : ''} review.</div>
       </div>`;
     return;
   }
