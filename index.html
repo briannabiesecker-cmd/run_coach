@@ -1777,6 +1777,42 @@
     border-color: var(--border);
   }
 
+  /* Race predictions */
+  .predict-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .predict-card {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .predict-card.target {
+    border-color: var(--accent-border);
+    background: var(--accent-bg);
+  }
+  .predict-card .label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ink-mid);
+  }
+  .predict-card .time {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    margin-top: 2px;
+  }
+  .predict-card .pace {
+    font-size: 11px;
+    color: var(--ink-light);
+    margin-top: 2px;
+  }
+  .predict-card.target .label { color: var(--accent); }
+
   /* Holistic guidance cards */
   .holistic-card {
     background: var(--bg-elev);
@@ -3192,7 +3228,7 @@
     <div class="row">
       <div class="field">
         <label>Race distance</label>
-        <select id="race-distance">
+        <select id="race-distance" onchange="updatePlanPicker()">
           <option value="">Choose…</option>
           <option value="5K">5K</option>
           <option value="10K">10K</option>
@@ -3209,12 +3245,20 @@
     <div class="row">
       <div class="field">
         <label>Current weekly miles</label>
-        <input type="number" id="weekly-mileage" min="0" max="200" placeholder="15" />
+        <input type="number" id="weekly-mileage" min="0" max="200" placeholder="15" onchange="updatePlanPicker()" oninput="updatePlanPicker()" />
       </div>
       <div class="field">
         <label>Longest recent run (mi)</label>
-        <input type="number" id="longest-recent-run" min="0" max="50" step="0.1" placeholder="6" />
+        <input type="number" id="longest-recent-run" min="0" max="50" step="0.1" placeholder="6" onchange="updatePlanPicker()" oninput="updatePlanPicker()" />
       </div>
+    </div>
+
+    <div class="field">
+      <label>Training plan</label>
+      <select id="plan-template">
+        <option value="">Choose a distance first</option>
+      </select>
+      <div id="plan-template-desc" style="font-size:11px;color:var(--ink-light);margin-top:4px;"></div>
     </div>
 
     <div class="row">
@@ -3574,6 +3618,9 @@
       <div class="section-label" style="margin-top:16px;">Weekly Review</div>
       <div id="weekly-review-section"></div>
 
+      <div class="section-label" style="margin-top:16px;">Race Predictions</div>
+      <div id="race-predictions"></div>
+
       <div class="section-label" style="margin-top:16px;">Pace Zones</div>
       <div class="pace-grid" id="pace-zones"></div>
 
@@ -3813,6 +3860,7 @@ function prefillSetupForm() {
   setVal('long-run-day',       p.longRunDay);
   setVal('coaching-style',     p.coachingStyle || 'encouraging');
   setVal('injury-notes',       p.injuryNotes);
+  updatePlanPicker();
 }
 
 // ════════════════════════════════════════════════════
@@ -4489,6 +4537,7 @@ function submitCheckIn() {
   saveCheckIn(todayISO(), checkInForm.type, data);
   checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '', actualType: '' };
   renderHome();
+  renderPerformance();
 }
 
 function cancelCheckIn() {
@@ -5123,6 +5172,7 @@ function submitManualWorkout() {
 
   if (!checkIns[date]) checkIns[date] = {};
   checkIns[date][type] = data;
+  invalidateDynamicPaceCache();
 
   // Persist
   try {
@@ -5913,6 +5963,70 @@ function renderFileList() {
 // in local generation. The Gemini path remains available via the
 // backend coach() action when quota recovers.
 
+// ─── PLAN PICKER ───
+// Maps distance → tier → { label, desc } for the setup form dropdown.
+// Labels are the real published program names from 06_Templates.js.
+const PLAN_OPTIONS = {
+  '5K': {
+    novice:       { label: 'Hal Higdon Beginner 5K',       desc: '6–8 weeks · No quality work · Build the habit and finish' },
+    intermediate: { label: 'Higdon Intermediate 5K',       desc: '8 weeks · Light intervals in build phase' },
+    advanced:     { label: 'Daniels 5K–15K',               desc: '8–12 weeks · 2 quality sessions/week' }
+  },
+  '10K': {
+    novice:       { label: 'Hal Higdon Novice 10K',        desc: '8 weeks · Pure easy + long runs' },
+    intermediate: { label: 'Higdon Intermediate 10K',      desc: '8–10 weeks · 1 fartlek or interval session/week' },
+    advanced:     { label: 'Daniels 10K',                  desc: '10–12 weeks · Threshold + VO2 max work' }
+  },
+  'Half Marathon': {
+    novice:       { label: 'Hal Higdon Novice Half',       desc: '10–12 weeks · Easy + long progression only' },
+    intermediate: { label: 'Higdon Intermediate Half',     desc: '12 weeks · 1 pace run/week at HM pace' },
+    advanced:     { label: 'Pfitzinger Faster Road Racing', desc: '12–14 weeks · Tempo + VO2 max intervals' }
+  },
+  'Marathon': {
+    novice:       { label: 'Hal Higdon Novice 1',          desc: '18 weeks · Volume only — zero quality work' },
+    intermediate: { label: 'Higdon Intermediate',          desc: '18 weeks · 1 marathon-pace run/week' },
+    advanced:     { label: 'Pfitzinger 18/55',             desc: '18 weeks · 2 quality sessions + MP long runs' }
+  }
+};
+
+function updatePlanPicker() {
+  const sel = document.getElementById('plan-template');
+  const descEl = document.getElementById('plan-template-desc');
+  const distance = document.getElementById('race-distance').value;
+  const options = PLAN_OPTIONS[distance];
+  if (!options) {
+    sel.innerHTML = '<option value="">Choose a distance first</option>';
+    descEl.textContent = '';
+    return;
+  }
+
+  // Auto-select tier from mileage (can be overridden)
+  const mileage = document.getElementById('weekly-mileage').value;
+  const longRun = document.getElementById('longest-recent-run').value;
+  const autoTier = inferTierFromMileage(mileage, longRun);
+
+  // Remember current selection to preserve manual override
+  const prev = sel.value;
+  sel.innerHTML = '';
+  for (const tier of ['novice', 'intermediate', 'advanced']) {
+    const opt = document.createElement('option');
+    opt.value = tier;
+    opt.textContent = options[tier].label;
+    sel.appendChild(opt);
+  }
+  // Keep manual override if valid, otherwise auto-select
+  if (prev && options[prev]) {
+    sel.value = prev;
+  } else {
+    sel.value = autoTier;
+  }
+  // Show description
+  descEl.textContent = options[sel.value] ? options[sel.value].desc : '';
+  sel.onchange = function() {
+    descEl.textContent = options[sel.value] ? options[sel.value].desc : '';
+  };
+}
+
 // Tier inference (matches the backend rules in clasp/05_Tier.js)
 function inferTierFromMileage(mileage, longestRecentRun) {
   const miles   = parseFloat(mileage) || 0;
@@ -6229,7 +6343,7 @@ function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
 
 function buildPlanLocally(inputs) {
   const distanceKey = getDistanceKeyFE(inputs.raceDistance);
-  const tier = inferTierFromMileage(inputs.weeklyMileage, inputs.longestRecentRun);
+  const tier = inputs.planTemplateTier || inferTierFromMileage(inputs.weeklyMileage, inputs.longestRecentRun);
   // Pick the template — for v1 we only have novice grids; intermediate
   // and advanced fall back to novice with a note.
   const preferredKey = distanceKey + '_' + tier;
@@ -6276,6 +6390,7 @@ function buildPlanLocally(inputs) {
     raceName: inputs.raceName || 'Your race',
     raceDate: inputs.raceDate,
     raceDistance: inputs.raceDistance,
+    planTemplate: inputs.planTemplateLabel || template.label,
     totalWeeks: template.totalWeeks,
     summary: summary,
     paceZones: buildPaceZones(distanceKey, inputs.goalTime, tier),
@@ -6316,6 +6431,11 @@ async function submitForm() {
     return;
   }
 
+  const planTemplateTier = document.getElementById('plan-template').value;
+  const planTemplateLabel = (PLAN_OPTIONS[distance] && PLAN_OPTIONS[distance][planTemplateTier])
+    ? PLAN_OPTIONS[distance][planTemplateTier].label
+    : '';
+
   // Update the runner profile so future form opens are pre-filled
   runnerProfile = {
     weeklyMileage: mileage,
@@ -6347,7 +6467,9 @@ async function submitForm() {
       goalTime: goal,
       daysPerWeek: daysPerWeek,
       longRunDay: longRunDay,
-      injuryNotes: injuryNotes
+      injuryNotes: injuryNotes,
+      planTemplateTier: planTemplateTier,
+      planTemplateLabel: planTemplateLabel
     });
     if (!generatedPlan || !Array.isArray(generatedPlan.weeks) || generatedPlan.weeks.length === 0) {
       throw new Error('Local generator returned an empty plan.');
@@ -6959,9 +7081,13 @@ function renderRaceCountdownInto(elId) {
   const totalDays = plan.weeks.length * 7;
   const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
   const dateLabel = new Date(plan.raceDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const templateLine = plan.planTemplate
+    ? `<div style="font-size:11px;color:var(--ink-light);margin-top:2px;">${escape(plan.planTemplate)}</div>`
+    : '';
   raceEl.innerHTML = `
     <div class="race-hero">
       <div class="race-hero-name">${escape(plan.raceName || 'Your Race')}</div>
+      ${templateLine}
       <div class="race-hero-row">
         <div class="race-hero-days">${days}<span class="units">days</span></div>
         <div class="race-hero-date">${escape(dateLabel)}</div>
@@ -8383,9 +8509,96 @@ function renderHolisticGuidance() {
   `).join('') || '<div class="empty" style="font-size:11px;padding:12px;">No tips yet.</div>';
 }
 
+function renderRacePredictions() {
+  const el = document.getElementById('race-predictions');
+  if (!el) return;
+
+  const RIEGEL_EXP = 1.06;
+  const RACE_DISTS = [
+    { key: '5K',            mi: 3.10686 },
+    { key: '10K',           mi: 6.21371 },
+    { key: 'Half Marathon', mi: 13.1094 },
+    { key: 'Marathon',      mi: 26.2188 }
+  ];
+
+  // Format seconds → H:MM:SS or MM:SS
+  const fmtTime = (sec) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.round(sec % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  };
+  const fmtPace = (sec, mi) => {
+    const paceMin = (sec / 60) / mi;
+    const mm = Math.floor(paceMin);
+    let ss = Math.round((paceMin - mm) * 60);
+    if (ss === 60) return `${mm+1}:00/mi`;
+    return `${mm}:${String(ss).padStart(2,'0')}/mi`;
+  };
+
+  // Try dynamic data first (from logged runs)
+  const dynamicZones = computeDynamicPaceZones();
+  let anchorDistMi = null, anchorTimeSec = null, sourceLabel = '';
+
+  if (dynamicZones && dynamicZones._sample && dynamicZones._sample.total >= 2) {
+    // Use the best effort from logged runs
+    const best = dynamicZones._sample;
+    anchorDistMi = parseFloat(best.bestEffortDist);
+    // Reconstruct time from pace and distance
+    const paceMin = parsePaceMinutes(best.bestEffortPace + '/mi');
+    if (paceMin && anchorDistMi) {
+      anchorTimeSec = paceMin * anchorDistMi * 60;
+      const effortDate = new Date(best.bestEffortISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      sourceLabel = `Based on your ${best.bestEffortDist}mi @ ${best.bestEffortPace}/mi on ${effortDate}`;
+    }
+  }
+
+  // Fallback to goal time if no logged runs
+  if (!anchorTimeSec && plan) {
+    const distKey = getDistanceKeyFE(plan.raceDistance || '');
+    const goalSec = parseGoalTimeToSeconds(
+      (plan.paceZones && plan.paceZones._goalTime) || runnerProfile.goalTime,
+      distKey
+    );
+    if (goalSec > 0) {
+      const distEntry = RACE_DISTS.find(d => getDistanceKeyFE(d.key) === distKey);
+      if (distEntry) {
+        anchorDistMi = distEntry.mi;
+        anchorTimeSec = goalSec;
+        sourceLabel = `Based on your ${plan.raceDistance || ''} goal of ${fmtTime(goalSec)}`;
+      }
+    }
+  }
+
+  if (!anchorTimeSec || !anchorDistMi) {
+    el.innerHTML = '<div class="pace-source-badge static">Log a few runs or set a goal time to see predicted race times</div>';
+    return;
+  }
+
+  // Predict times via Riegel
+  const targetDist = plan ? getDistanceKeyFE(plan.raceDistance || '') : '';
+  const cards = RACE_DISTS.map(race => {
+    const predSec = anchorTimeSec * Math.pow(race.mi / anchorDistMi, RIEGEL_EXP);
+    const isTarget = getDistanceKeyFE(race.key) === targetDist;
+    return `<div class="predict-card${isTarget ? ' target' : ''}">
+      <div class="label">${race.key}${isTarget ? ' ★' : ''}</div>
+      <div class="time">${fmtTime(predSec)}</div>
+      <div class="pace">${fmtPace(predSec, race.mi)}</div>
+    </div>`;
+  }).join('');
+
+  const badge = dynamicZones && dynamicZones._sample && dynamicZones._sample.total >= 2
+    ? `<div class="pace-source-badge">⚡ ${sourceLabel}</div>`
+    : `<div class="pace-source-badge static">📋 ${sourceLabel}</div>`;
+
+  el.innerHTML = badge + `<div class="predict-grid">${cards}</div>`;
+}
+
 function renderPerformance() {
   renderMileageProgressionChart();
   renderWeeklyReviewSection();
+  renderRacePredictions();
 
   // Pace zones — prefer dynamic (Riegel/Daniels from logged runs)
   // over the static AI-set zones in plan.paceZones.
