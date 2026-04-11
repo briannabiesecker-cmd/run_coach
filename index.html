@@ -5622,6 +5622,10 @@ function submitManualWorkout() {
 
   if (!checkIns[date]) checkIns[date] = {};
   checkIns[date][saveType] = data;
+  // When switching between run and strength, clear the opposite slot
+  // so cloud sync doesn't restore a stale entry that conflicts.
+  if (saveType === 'strength' && checkIns[date].run) delete checkIns[date].run;
+  if (saveType === 'run' && manualForm.editingType === 'strength') delete checkIns[date].strength;
   invalidateDynamicPaceCache();
 
   // Persist
