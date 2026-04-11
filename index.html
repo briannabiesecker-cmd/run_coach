@@ -9660,7 +9660,7 @@ function renderRacePredictions() {
       const mid = (lo + hi) / 2;
       const v = distM / mid;
       const vd = vo2AtV(v) / pctMax(mid);
-      if (vd > vdotTarget) hi = mid; else lo = mid;
+      if (vd > vdotTarget) lo = mid; else hi = mid;
     }
     return (lo + hi) / 2 * 60; // seconds
   };
@@ -9673,9 +9673,11 @@ function renderRacePredictions() {
 
   // Format seconds → H:MM:SS or MM:SS
   const fmtTime = (sec) => {
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = Math.round(sec % 60);
+    let totalSec = Math.round(sec);
+    const h = Math.floor(totalSec / 3600);
+    totalSec %= 3600;
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
     if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     return `${m}:${String(s).padStart(2,'0')}`;
   };
