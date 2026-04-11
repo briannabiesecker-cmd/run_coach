@@ -91,6 +91,17 @@ function doGet(e) {
       else { result = listUsers(); }
     } else if (action === 'verifyPasscode') {
       result = checkPasscode(e.parameter.passcode);
+    } else if (action === 'stravaAuthUrl') {
+      var authSA = checkPasscode(e.parameter.passcode);
+      if (!authSA.ok) { result = { error: authSA.error }; }
+      else { result = getStravaAuthUrl(e.parameter.userName, e.parameter.passcode); }
+    } else if (action === 'stravaCallback') {
+      // OAuth callback from Strava — returns HTML redirect, not JSONP
+      return handleStravaCallback(e.parameter);
+    } else if (action === 'stravaStatus') {
+      var authSS = checkPasscode(e.parameter.passcode);
+      if (!authSS.ok) { result = { error: authSS.error }; }
+      else { result = isStravaConnected(e.parameter.userName); }
     } else if (action === 'coach') {
       var auth = checkPasscode(e.parameter.passcode);
       if (!auth.ok) { result = { error: auth.error }; }
@@ -147,6 +158,8 @@ function doPost(e) {
     else if (action === 'saveUserData')       result = saveUserData(body);
     else if (action === 'deleteUser')         result = deleteUser(body.userName);
     else if (action === 'analyzeRun')        result = analyzeRun(body);
+    else if (action === 'stravaSync')        result = stravaSync(body);
+    else if (action === 'stravaDisconnect')  result = stravaDisconnect(body.userName);
     else                                       result = { error: 'Unknown action: ' + action };
   } catch (err) {
     result = { error: err.message || String(err) };
