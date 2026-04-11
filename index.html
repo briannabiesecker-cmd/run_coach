@@ -1399,7 +1399,6 @@
     border-left-color: #ef4444;
     background: rgba(239,68,68,0.08);
   }
-  .day-mini.race { background: rgba(239,68,68,0.18); border: 1px solid rgba(239,68,68,0.45); }
   .day-cell.race { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); }
   .pwr-race-badge {
     font-size: 9px;
@@ -1742,43 +1741,7 @@
     color: var(--ink-dim);
     text-align: right;
   }
-  .day-mini-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    margin-top: 4px;
-  }
-  .day-mini {
-    background: rgba(255,255,255,0.04);
-    border-radius: 8px;
-    padding: 6px 2px;
-    text-align: center;
-  }
-  .day-mini .label {
-    font-size: 9px;
-    color: var(--ink-dim);
-    font-weight: 700;
-  }
-  .day-mini .val {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--ink);
-    margin-top: 2px;
-  }
-  .day-mini.rest .val { color: var(--ink-faint); }
-  .day-mini.today {
-    background: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-  .day-mini.today .label { color: #0a1628; opacity: 0.7; }
-  .day-mini.today .val { color: #0a1628; }
-  .day-mini.long-run {
-    background: rgba(245,158,11,0.15);
-    border: 1px solid rgba(245,158,11,0.4);
-  }
-  .day-mini.long-run.today { background: var(--accent); border-color: var(--accent); }
-
-  /* Long-run highlight on Home week strip */
+  /* Long-run highlight */
   .day-cell.long-run {
     background: rgba(245,158,11,0.10);
     border: 1px solid rgba(245,158,11,0.35);
@@ -2590,14 +2553,6 @@
     font-size: 18px;
   }
 
-  /* Make plan-tab day cells look tappable in current week */
-  .week-card.current .day-mini {
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .week-card.current .day-mini:hover {
-    background: rgba(41,121,255,0.1);
-  }
   .swap-hint {
     font-size: 10px;
     color: var(--accent);
@@ -4897,6 +4852,30 @@ function loadRunnerProfile() {
 function getCheckIn(dateISO, type) {
   return (checkIns[dateISO] && checkIns[dateISO][type]) || null;
 }
+
+function getDayISO(wkIdx, dayIdx) {
+  if (!planStartDate) return '';
+  const d = new Date(planStartDate + 'T00:00:00');
+  d.setDate(d.getDate() + wkIdx * 7 + dayIdx);
+  return d.toISOString().slice(0, 10);
+}
+
+function getDayCheckInState(wkIdx, dayIdx, plannedType) {
+  const iso = getDayISO(wkIdx, dayIdx);
+  if (!iso) return { hasRun: false, hasStr: false, loggedRunMi: 0, loggedRunType: '' };
+  const ci = checkIns[iso] && checkIns[iso].run;
+  const si = checkIns[iso] && checkIns[iso].strength;
+  let hasRun = false, loggedRunMi = 0, loggedRunType = '';
+  if (ci && (ci.status === 'done' || ci.status === 'modified')) {
+    hasRun = true;
+    loggedRunMi = ci.distance || 0;
+    loggedRunType = ci.actualType || plannedType || 'Run';
+  }
+  return { hasRun, hasStr: !!(si && si.status === 'done'), loggedRunMi, loggedRunType };
+}
+
+const TYPE_CLASS_MAP = { Easy: 'easy', Strides: 'easy', Long: 'long', Tempo: 'tempo', Intervals: 'intervals', 'Hill Repeats': 'intervals', Cross: 'cross', Rest: 'rest' };
+function getTypeClass(type) { return TYPE_CLASS_MAP[type] || 'rest'; }
 
 function saveCheckIn(dateISO, type, data) {
   if (!checkIns[dateISO]) checkIns[dateISO] = {};
@@ -8370,16 +8349,9 @@ function renderPlan() {
   const dayLabels = ['M','Tu','W','Th','F','Sa','Su'];
   const totalRunDays = (week.days || []).filter(d => d.type !== 'Rest' && d.miles).length;
   let doneRunDays = 0;
-  if (planStartDate) {
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(planStartDate + 'T00:00:00');
-      date.setDate(date.getDate() + wkIdx * 7 + i);
-      const iso = date.toISOString().slice(0, 10);
-      const ci = checkIns[iso] && checkIns[iso].run;
-      const si = checkIns[iso] && checkIns[iso].strength;
-      if (ci && (ci.status === 'done' || ci.status === 'modified')) doneRunDays++;
-      else if (si && si.status === 'done') doneRunDays++;
-    }
+  for (let i = 0; i < 7; i++) {
+    const st = getDayCheckInState(wkIdx, i, '');
+    if (st.hasRun || st.hasStr) doneRunDays++;
   }
   const segments = [];
   for (let i = 0; i < totalRunDays; i++) {
@@ -8391,52 +8363,32 @@ function renderPlan() {
   // Selected week detail card
   const phaseColor = getPhaseColor(week.phase);
   const totalStrengthSessions = (strengthSchedule || []).length;
-  const isCurrentWeek = wkIdx === getCurrentWeekIndex();
-  // Find the long-run day (shared helper) and today's index for highlighting
+  const currentWkIdx0 = getCurrentWeekIndex();
+  const isCurrentWeek = wkIdx === currentWkIdx0;
   const longRunIdx = findLongRunDayIdx(week);
   const todayDayIdx = getCurrentDayIndex();
-  // Styled day-cell strip with completion status (live view)
   const days = (week.days || []).map((d, i) => {
     const isRest = d.type === 'Rest' || !d.miles;
-    const isPast = isCurrentWeek ? i < todayDayIdx : wkIdx < getCurrentWeekIndex();
-    const isFuture = isCurrentWeek ? i > todayDayIdx : wkIdx > getCurrentWeekIndex();
+    const isPast = isCurrentWeek ? i < todayDayIdx : wkIdx < currentWkIdx0;
+    const isFuture = isCurrentWeek ? i > todayDayIdx : wkIdx > currentWkIdx0;
     const isToday = isCurrentWeek && i === todayDayIdx;
     const onClick = `onclick="openWorkoutDetail(${wkIdx}, ${i})"`;
-    // Check what was actually logged on this day
-    let hasRun = false, hasStr = false, loggedRunMi = 0, loggedRunType = '';
-    if (planStartDate) {
-      const ld = new Date(planStartDate + 'T00:00:00');
-      ld.setDate(ld.getDate() + wkIdx * 7 + i);
-      const liso = ld.toISOString().slice(0, 10);
-      const lci = checkIns[liso] && checkIns[liso].run;
-      const lsi = checkIns[liso] && checkIns[liso].strength;
-      if (lci && (lci.status === 'done' || lci.status === 'modified')) {
-        hasRun = true;
-        loggedRunMi = lci.distance || 0;
-        loggedRunType = lci.actualType || d.type || 'Run';
-      }
-      if (lsi && lsi.status === 'done') hasStr = true;
-    }
+    const { hasRun, hasStr, loggedRunMi, loggedRunType } = getDayCheckInState(wkIdx, i, d.type);
     const hasActual = hasRun || hasStr;
 
     let stateClass = '';
     let typeLabel = isRest ? 'Rest' : d.type;
-    let typeClass = d.type === 'Easy' || d.type === 'Strides' ? 'easy'
-      : d.type === 'Long' ? 'long' : d.type === 'Tempo' ? 'tempo'
-      : d.type === 'Intervals' || d.type === 'Hill Repeats' ? 'intervals'
-      : d.type === 'Cross' ? 'cross' : 'rest';
+    let typeClass = getTypeClass(d.type);
     let subText = isRest ? '' : (d.miles || 0) + 'mi';
     let statusContent = '';
 
     if (isRest && hasRun) {
-      // Bonus run on rest day
       stateClass = ' done';
       typeLabel = loggedRunType;
       typeClass = 'easy';
       subText = loggedRunMi ? loggedRunMi + 'mi' : '';
       statusContent = '<div class="day-status">\u2713</div>';
     } else if (isRest && hasStr) {
-      // Strength only on rest day
       stateClass = ' done';
       typeLabel = 'Strength';
       typeClass = 'cross';
@@ -8445,13 +8397,11 @@ function renderPlan() {
     } else if (isRest) {
       stateClass = ' rest';
     } else if (hasRun) {
-      // Planned workout completed as a run
       stateClass = ' done';
       if (loggedRunMi) subText = loggedRunMi + 'mi';
       if (loggedRunType && loggedRunType !== d.type) typeLabel = loggedRunType;
       statusContent = '<div class="day-status">\u2713</div>';
     } else if (hasStr && !hasRun) {
-      // Did strength instead of planned run
       stateClass = ' done';
       typeLabel = 'Strength';
       typeClass = 'cross';
