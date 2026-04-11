@@ -617,52 +617,101 @@
   /* ─── Day strip ────────────────────────────────── */
   .day-strip {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     margin-top: 16px;
     position: relative;
     z-index: 1;
   }
   .day-cell {
     flex: 1;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
     border-radius: 10px;
-    padding: 8px 4px;
+    padding: 8px 2px 10px;
     text-align: center;
-    transition: all 0.2s;
-  }
-  .day-cell.today {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .day-cell.done {
-    background: rgba(0,200,150,0.15);
+    position: relative;
   }
   .day-cell .day-letter {
     font-size: 10px;
-    font-weight: 700;
-    color: var(--ink-mid);
-    letter-spacing: 1px;
-  }
-  .day-cell.today .day-letter { color: #0a1628; }
-  .day-cell .day-icon {
-    font-size: 16px;
-    margin-top: 4px;
-  }
-  .day-cell .day-sub {
-    font-size: 9px;
-    color: var(--ink-light);
-    margin-top: 3px;
-  }
-  .day-cell.today .day-sub { color: #0a1628; }
-  .day-check {
-    font-size: 10px;
-    color: var(--accent);
     font-weight: 800;
-    margin-top: 2px;
+    color: var(--ink-dim);
+    letter-spacing: 0.5px;
   }
-  .day-cell.done .day-check { color: var(--accent); }
-  .day-cell.today .day-check { color: #0a1628; }
+  .day-cell .day-type-bar {
+    width: 20px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--ink-dim);
+    margin: 6px auto 0;
+    opacity: 0.4;
+  }
+  .day-cell .day-type-bar.easy   { background: #00C896; opacity: 0.5; }
+  .day-cell .day-type-bar.long   { background: #f59e0b; opacity: 0.7; }
+  .day-cell .day-type-bar.tempo  { background: #ef4444; opacity: 0.7; }
+  .day-cell .day-type-bar.intervals { background: #ec4899; opacity: 0.7; }
+  .day-cell .day-type-bar.rest   { background: transparent; }
+  .day-cell .day-type-bar.cross  { background: #8b5cf6; opacity: 0.5; }
+  .day-cell .day-sub {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--ink-light);
+    margin-top: 5px;
+  }
+  .day-cell .day-status {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin: 6px auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 800;
+  }
+  /* Rest day — no status circle */
+  .day-cell.rest { opacity: 0.5; }
+  .day-cell.rest .day-sub { color: var(--ink-dim); }
+  .day-cell.rest .day-status { display: none; }
+  /* Future day — hollow circle */
+  .day-cell.future .day-status {
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: transparent;
+  }
+  /* Done — filled green circle with check */
+  .day-cell.done {
+    background: rgba(0,200,150,0.1);
+    border-color: rgba(0,200,150,0.25);
+  }
+  .day-cell.done .day-letter { color: var(--accent); }
+  .day-cell.done .day-sub { color: var(--accent); }
+  .day-cell.done .day-status {
+    background: var(--accent);
+    color: #0a1628;
+  }
+  /* Missed — past day, not rest, not logged */
+  .day-cell.missed .day-status {
+    border: 1.5px solid rgba(239,68,68,0.5);
+    background: transparent;
+    color: rgba(239,68,68,0.7);
+  }
+  .day-cell.missed .day-sub { color: rgba(239,68,68,0.6); }
+  /* Today — accent ring */
+  .day-cell.today {
+    background: rgba(0,200,150,0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .day-cell.today .day-letter { color: var(--accent); font-size: 11px; }
+  .day-cell.today .day-sub { color: var(--ink); }
+  .day-cell.today .day-status {
+    border: 2px solid var(--accent);
+    background: transparent;
+  }
+  .day-cell.today.done .day-status {
+    background: var(--accent);
+    border: none;
+    color: #0a1628;
+  }
 
   /* ─── Race countdown ───────────────────────────── */
   .race-card {
@@ -7822,8 +7871,9 @@ function renderHome() {
     const stripLongRunIdx = findLongRunDayIdx(week);
     const cells = week.days.map((d, i) => {
       const isToday = i === dayIdx;
-      const isRace = d.type === 'Race';
-      const isLong = i === stripLongRunIdx && d.type !== 'Rest' && d.miles && !isRace;
+      const isRest = d.type === 'Rest';
+      const isPast = i < dayIdx;
+      const isFuture = i > dayIdx;
       let hasActualRun = false;
       if (planStartDate) {
         const dt = new Date(planStartDate + 'T00:00:00');
@@ -7832,21 +7882,33 @@ function renderHome() {
         const ci = checkIns[iso] && checkIns[iso].run;
         if (ci && ci.status === 'done') hasActualRun = true;
       }
-      const stateClass = isToday ? ' today' : (hasActualRun ? ' done' : '');
-      const longClass = isLong ? ' long-run' : '';
-      const raceClass = isRace ? ' race' : '';
-      const cellClass = 'day-cell' + stateClass + longClass + raceClass;
-      const icon = TYPE_ICONS[d.type] || '—';
-      const dayShort = DAYS_FULL[i];
-      const hasStrength = getStrengthForDay(dayShort).length > 0;
-      const strengthMark = hasStrength ? '<div class="strength-badge">💪</div>' : '';
-      const checkMark = hasActualRun ? '<div class="day-check">✓</div>' : '';
+      // State classes
+      let stateClass = '';
+      if (isRest) stateClass = ' rest';
+      else if (hasActualRun) stateClass = ' done';
+      else if (isToday) stateClass = ' today';
+      else if (isPast) stateClass = ' missed';
+      else stateClass = ' future';
+      // Type bar color
+      const typeKey = d.type === 'Easy' || d.type === 'Strides' ? 'easy'
+        : d.type === 'Long' ? 'long'
+        : d.type === 'Tempo' ? 'tempo'
+        : d.type === 'Intervals' || d.type === 'Hill Repeats' ? 'intervals'
+        : d.type === 'Cross' ? 'cross'
+        : 'rest';
+      // Status indicator
+      let statusContent = '';
+      if (!isRest) {
+        if (hasActualRun) statusContent = '<div class="day-status">\u2713</div>';
+        else if (isPast) statusContent = '<div class="day-status">\u2717</div>';
+        else statusContent = '<div class="day-status"></div>';
+      }
       return `
-        <div class="${cellClass}">
+        <div class="day-cell${stateClass}">
           <div class="day-letter">${dayLetters[i]}</div>
-          <div class="day-icon">${icon}</div>
-          <div class="day-sub">${d.type === 'Rest' ? 'Rest' : (d.miles || 0) + 'mi'}</div>
-          ${checkMark}${strengthMark}
+          <div class="day-type-bar ${typeKey}"></div>
+          <div class="day-sub">${isRest ? 'Rest' : (d.miles || 0) + 'mi'}</div>
+          ${statusContent}
         </div>`;
     }).join('');
     stripEl.innerHTML = `
@@ -8333,9 +8395,14 @@ function renderPlan() {
     if (effort.pct.interval) legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#ec4899"></div>Interval ${effort.pct.interval}%</div>`);
     if (effort.pct.cross)    legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#8b5cf6"></div>Cross ${effort.pct.cross}%</div>`);
     const balanced = effort.aerobicPct >= 75;
-    const ratioText = balanced
-      ? `✓ ${effort.aerobicPct}% aerobic, ${effort.qualityPct}% quality — balanced 80/20`
-      : `⚠ ${effort.aerobicPct}% aerobic, ${effort.qualityPct}% quality — heavy on intensity for this tier`;
+    let ratioText;
+    if (effort.qualityPct === 0) {
+      ratioText = `${effort.aerobicPct}% aerobic — all easy effort this week`;
+    } else if (balanced) {
+      ratioText = `${effort.aerobicPct}% aerobic, ${effort.qualityPct}% quality — good balance`;
+    } else {
+      ratioText = `${effort.aerobicPct}% aerobic, ${effort.qualityPct}% quality — heavy on intensity`;
+    }
     effortHTML = `
       <div class="effort-chart-card">
         <div class="effort-chart-label">Effort distribution · ${effort.total} mi total</div>
