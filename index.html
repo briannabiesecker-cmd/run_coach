@@ -888,24 +888,24 @@
     font-weight: 800;
   }
 
-  /* Sparkline */
+  /* Mileage progression area chart */
   .sparkline-wrap {
     margin-top: 14px;
     margin-bottom: 14px;
     background: var(--bg-elev-2);
-    border-radius: 10px;
-    padding: 10px 10px 6px;
+    border-radius: 12px;
+    padding: 12px 12px 8px;
   }
   .sparkline-svg {
     width: 100%;
-    height: 80px;
+    height: 120px;
     display: block;
   }
   .sparkline-legend {
     display: flex;
     gap: 16px;
     justify-content: center;
-    margin-top: 4px;
+    margin-top: 6px;
     font-size: 10px;
     color: var(--ink-light);
   }
@@ -916,10 +916,11 @@
   }
   .sparkline-legend .swatch {
     width: 14px;
-    height: 2px;
+    height: 8px;
+    border-radius: 2px;
   }
-  .sparkline-legend .swatch.planned { background: rgba(255,255,255,0.3); border-top: 1px dashed rgba(255,255,255,0.5); }
-  .sparkline-legend .swatch.actual  { background: var(--accent); }
+  .sparkline-legend .swatch.planned { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); }
+  .sparkline-legend .swatch.actual  { background: rgba(0,200,150,0.3); border: 1px solid var(--accent); }
 
   /* Stats row */
   .mileage-prog-stats {
@@ -8050,50 +8051,106 @@ function renderSparkline() {
   if (!plan || !plan.weeks || plan.weeks.length < 2) return '';
   const weeks = plan.weeks;
   const N = weeks.length;
-  const W = 100; // viewBox width units (% based)
-  const H = 100;
+  const W = 200; // viewBox units — bigger = smoother curves
+  const H = 120;
   const max = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
-  const padX = 4;
-  const padY = 8;
+  const padX = 8;
+  const padY = 12;
+  const padBottom = 20; // room for week labels
   const innerW = W - padX * 2;
-  const innerH = H - padY * 2;
+  const innerH = H - padY - padBottom;
 
-  // Planned curve
-  const plannedPts = weeks.map((w, i) => {
-    const x = padX + (i / (N - 1)) * innerW;
-    const y = padY + innerH - ((w.totalMiles || 0) / max) * innerH;
-    return [x, y];
-  });
+  // Helper: x/y for a given week index and mile value
+  const wx = (i) => padX + (i / (N - 1)) * innerW;
+  const wy = (mi) => padY + innerH - (mi / max) * innerH;
+  const bottomY = padY + innerH;
 
-  // Smooth path through planned points
-  const plannedPath = plannedPts.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
+  // ─── Planned: solid area fill + line ───
+  const plannedPts = weeks.map((w, i) => [wx(i), wy(w.totalMiles || 0)]);
+  const plannedLine = plannedPts.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
+  // Close the area: right edge down → bottom-right → bottom-left → back to start
+  const plannedArea = plannedLine + ` L ${plannedPts[N-1][0]} ${bottomY} L ${plannedPts[0][0]} ${bottomY} Z`;
 
-  // Actual dots — only weeks with logged data
+  // ─── Actual: area fill + line + dots (only completed weeks with logged data) ───
   const currentIdx = getCurrentWeekIndex();
-  const actualDots = [];
+  const actualPts = [];
   for (let i = 0; i <= currentIdx && i < N; i++) {
     const a = actualMilesForWeek(i);
-    if (a > 0) {
-      const x = padX + (i / (N - 1)) * innerW;
-      const y = padY + innerH - (a / max) * innerH;
-      actualDots.push({ x, y, mi: a, planned: weeks[i].totalMiles || 0 });
-    }
+    actualPts.push({ x: wx(i), y: wy(a), mi: a, planned: weeks[i].totalMiles || 0 });
+  }
+  let actualAreaSvg = '';
+  let actualLineSvg = '';
+  let actualDotsSvg = '';
+  if (actualPts.length > 0) {
+    const aLine = actualPts.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+    const aArea = aLine + ` L ${actualPts[actualPts.length-1].x} ${bottomY} L ${actualPts[0].x} ${bottomY} Z`;
+    actualAreaSvg = `<path d="${aArea}" fill="url(#actualGrad)" />`;
+    actualLineSvg = `<path d="${aLine}" fill="none" stroke="#00C896" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    actualDotsSvg = actualPts.map(d =>
+      `<circle cx="${d.x}" cy="${d.y}" r="3" fill="#00C896" stroke="#0a1628" stroke-width="1.5"/>`
+    ).join('');
   }
 
-  // Current week marker (vertical line)
-  const currentX = padX + (currentIdx / (N - 1)) * innerW;
+  // ─── Current week marker ───
+  const currentX = wx(Math.min(currentIdx, N - 1));
+  const currentMarker = `
+    <rect x="${currentX - 3}" y="${padY - 2}" width="6" height="${innerH + 4}" rx="3" fill="rgba(0,200,150,0.08)"/>
+    <line x1="${currentX}" y1="${padY}" x2="${currentX}" y2="${bottomY}" stroke="rgba(0,200,150,0.4)" stroke-width="1" stroke-dasharray="3,3"/>`;
+
+  // ─── Week labels along the bottom ───
+  // Show every Nth label to avoid crowding (show ~6-8 labels max)
+  const labelEvery = Math.max(1, Math.ceil(N / 8));
+  const weekLabels = weeks.map((w, i) => {
+    if (i % labelEvery !== 0 && i !== N - 1) return '';
+    const x = wx(i);
+    return `<text x="${x}" y="${H - 4}" text-anchor="middle" font-size="6" fill="rgba(255,255,255,0.35)" font-family="inherit">${w.week}</text>`;
+  }).join('');
+
+  // ─── Y-axis scale labels (0, max/2, max) ───
+  const midMi = Math.round(max / 2);
+  const yLabels = `
+    <text x="${padX - 2}" y="${bottomY + 1}" text-anchor="end" font-size="5" fill="rgba(255,255,255,0.25)" font-family="inherit">0</text>
+    <text x="${padX - 2}" y="${wy(midMi) + 2}" text-anchor="end" font-size="5" fill="rgba(255,255,255,0.25)" font-family="inherit">${midMi}</text>
+    <text x="${padX - 2}" y="${padY + 3}" text-anchor="end" font-size="5" fill="rgba(255,255,255,0.25)" font-family="inherit">${Math.round(max)}</text>
+  `;
+
+  // ─── Grid lines ───
+  const gridLines = `
+    <line x1="${padX}" y1="${bottomY}" x2="${W - padX}" y2="${bottomY}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+    <line x1="${padX}" y1="${wy(midMi)}" x2="${W - padX}" y2="${wy(midMi)}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5" stroke-dasharray="2,3"/>
+    <line x1="${padX}" y1="${padY}" x2="${W - padX}" y2="${padY}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5" stroke-dasharray="2,3"/>
+  `;
+
+  // ─── Race flag at the end ───
+  const flagX = wx(N - 1);
+  const flagSvg = `<text x="${flagX}" y="${padY - 2}" text-anchor="middle" font-size="8">🏁</text>`;
 
   return `
     <div class="sparkline-wrap">
       <svg class="sparkline-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-        <line x1="${currentX}" y1="${padY}" x2="${currentX}" y2="${H - padY}" stroke="rgba(0,200,150,0.3)" stroke-width="0.5" stroke-dasharray="2,2"/>
-        <path d="${plannedPath}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1" stroke-dasharray="2,1.5"/>
-        ${actualDots.map(d => `<circle cx="${d.x}" cy="${d.y}" r="1.5" fill="#00C896"/>`).join('')}
-        ${actualDots.length > 1 ? `<polyline fill="none" stroke="#00C896" stroke-width="1" points="${actualDots.map(d => d.x + ',' + d.y).join(' ')}"/>` : ''}
-        <text x="${W - padX}" y="${padY + 3}" text-anchor="end" font-size="6" fill="#fca5a5">🏁</text>
+        <defs>
+          <linearGradient id="plannedGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.12)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0.02)"/>
+          </linearGradient>
+          <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(0,200,150,0.35)"/>
+            <stop offset="100%" stop-color="rgba(0,200,150,0.05)"/>
+          </linearGradient>
+        </defs>
+        ${gridLines}
+        ${currentMarker}
+        <path d="${plannedArea}" fill="url(#plannedGrad)"/>
+        <path d="${plannedLine}" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4,3" stroke-linecap="round"/>
+        ${actualAreaSvg}
+        ${actualLineSvg}
+        ${actualDotsSvg}
+        ${flagSvg}
+        ${weekLabels}
+        ${yLabels}
       </svg>
       <div class="sparkline-legend">
-        <div class="item"><div class="swatch planned"></div>Planned curve</div>
+        <div class="item"><div class="swatch planned"></div>Planned</div>
         <div class="item"><div class="swatch actual"></div>Actual</div>
       </div>
     </div>`;
@@ -8293,8 +8350,10 @@ function renderMileageProgressionChart() {
           <div style="font-size:9px;color:var(--ink-faint);margin-top:1px;">to date</div>
         </div>
         <div class="mp-stat">
-          <div class="num ${complianceClass}">${compliance}%</div>
-          <div class="label">On track</div>
+          ${totalActual === 0 && totalPlanned > 0
+            ? '<div class="num" style="font-size:11px;color:var(--ink-light);">—</div><div class="label">Log a run to start</div>'
+            : `<div class="num ${complianceClass}">${compliance}%</div><div class="label">On track</div>`
+          }
         </div>
       </div>
       ${renderRecentWeeksDetail()}
