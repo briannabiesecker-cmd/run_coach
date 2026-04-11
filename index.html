@@ -8992,16 +8992,12 @@ function renderWeeklyReviewSection() {
 // Compute actual miles for a single plan week index
 function actualMilesForWeek(wkIdx) {
   if (!plan || !plan.weeks || !plan.weeks[wkIdx] || !planStartDate) return 0;
-  const w = plan.weeks[wkIdx];
   let actual = 0;
   for (let di = 0; di < 7; di++) {
-    const date = new Date(planStartDate + 'T00:00:00');
-    date.setDate(date.getDate() + wkIdx * 7 + di);
-    const iso = date.toISOString().slice(0, 10);
+    const iso = getDayISO(wkIdx, di);
     const ci = checkIns[iso] && checkIns[iso].run;
-    if (ci && ci.status === 'done') {
-      const plannedMi = (w.days && w.days[di]) ? (w.days[di].miles || 0) : 0;
-      actual += ci.distance || plannedMi || 0;
+    if (ci && (ci.status === 'done' || ci.status === 'modified')) {
+      actual += parseFloat(ci.distance) || 0;
     }
   }
   return actual;
