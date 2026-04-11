@@ -9046,11 +9046,28 @@ function renderSparkline() {
   const wy = (mi) => padY + innerH - (mi / max) * innerH;
   const bottomY = padY + innerH;
 
-  // ─── Planned: solid area fill + line ───
-  const plannedPts = weeks.map((w, i) => [wx(i), wy(w.totalMiles || 0)]);
-  const plannedLine = plannedPts.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
-  // Close the area: right edge down → bottom-right → bottom-left → back to start
-  const plannedArea = plannedLine + ` L ${plannedPts[N-1][0]} ${bottomY} L ${plannedPts[0][0]} ${bottomY} Z`;
+  // ─── Planned: phase-colored line segments + area fills ───
+  const plannedPts = weeks.map((w, i) => ({ x: wx(i), y: wy(w.totalMiles || 0), phase: w.phase }));
+  // Build per-phase line segments and area fills
+  let plannedSegsSvg = '';
+  let plannedAreasSvg = '';
+  let segStart = 0;
+  for (let i = 1; i <= N; i++) {
+    if (i === N || plannedPts[i].phase !== plannedPts[segStart].phase) {
+      const color = getPhaseColor(plannedPts[segStart].phase);
+      const pts = plannedPts.slice(segStart, i);
+      const line = pts.map((p, j) => (j === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+      // Connect to next segment start if not last
+      const nextPt = i < N ? `L ${plannedPts[i].x} ${plannedPts[i].y}` : '';
+      const fullLine = line + nextPt;
+      plannedSegsSvg += `<path d="${fullLine}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>`;
+      // Area fill
+      const lastPt = i < N ? plannedPts[i] : pts[pts.length - 1];
+      const areaPath = line + (nextPt || '') + ` L ${lastPt.x} ${bottomY} L ${pts[0].x} ${bottomY} Z`;
+      plannedAreasSvg += `<path d="${areaPath}" fill="${color}" opacity="0.08"/>`;
+      segStart = i;
+    }
+  }
 
   // ─── Actual: area fill + line + dots (only completed weeks with logged data) ───
   const currentIdx = getCurrentWeekIndex();
@@ -9126,8 +9143,8 @@ function renderSparkline() {
         </defs>
         ${gridLines}
         ${currentMarker}
-        <path d="${plannedArea}" fill="url(#plannedGrad)"/>
-        <path d="${plannedLine}" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-dasharray="4,3" stroke-linecap="round"/>
+        ${plannedAreasSvg}
+        ${plannedSegsSvg}
         ${actualAreaSvg}
         ${actualLineSvg}
         ${actualDotsSvg}
