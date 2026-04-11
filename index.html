@@ -4019,6 +4019,8 @@ function showLoading(label, sub) {
 // buttons on the name screen. Best-effort — if the fetch fails (offline,
 // first-ever use, etc.) the text input is still there as a fallback.
 async function loadExistingProfiles() {
+  // Warm the script so the subsequent cloud pull is fast
+  warmAppsScript();
   const el = document.getElementById('existing-profiles');
   if (!el) return;
   el.innerHTML = '<div style="font-size:11px;color:var(--ink-light);text-align:center;">Loading profiles…</div>';
@@ -4515,7 +4517,7 @@ async function hydrateFromCloudAndRoute() {
   try {
     cloudPayload = await Promise.race([
       pullFromCloud(),
-      new Promise(resolve => setTimeout(() => resolve(null), 8000))
+      new Promise(resolve => setTimeout(() => resolve(null), 15000))
     ]);
   } catch(e) {
     cloudPayload = null;
@@ -4541,7 +4543,11 @@ async function hydrateFromCloudAndRoute() {
   loadRunnerProfile();
   showView('setup');
   if (cloudPayload === null && getUserName()) {
-    showFormAlert('Could not sync your plan from the cloud. You can create a new plan below, or try refreshing.');
+    const alertEl = document.getElementById('form-alert');
+    if (alertEl) {
+      alertEl.innerHTML = 'Could not sync your plan from the cloud. <button onclick="hydrateFromCloudAndRoute()" style="background:var(--accent);color:#0A0E17;border:none;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;margin-left:8px;">Retry</button>';
+      alertEl.classList.remove('hidden');
+    }
   }
 }
 
