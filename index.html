@@ -643,12 +643,13 @@
     background: rgba(255,255,255,0.04);
     border: 1.5px solid rgba(255,255,255,0.08);
     border-radius: 14px;
-    padding: 12px 2px 14px;
+    padding: 14px 2px 16px;
     text-align: center;
     position: relative;
+    min-width: 0;
   }
   .day-cell .day-letter {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     color: rgba(255,255,255,0.4);
   }
@@ -656,9 +657,9 @@
     font-size: 8px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
-    margin-top: 8px;
-    min-height: 20px;
+    letter-spacing: 0.3px;
+    margin-top: 10px;
+    min-height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -8366,7 +8367,7 @@ function renderPlan() {
   // Progress segments + workouts completed
   // Count run (done or modified) OR strength-only as completed — same
   // logic as the Home week strip so the two tabs stay in sync.
-  const dayLabels = ['M','T','W','T','F','S','S'];
+  const dayLabels = ['M','Tu','W','Th','F','Sa','Su'];
   const totalRunDays = (week.days || []).filter(d => d.type !== 'Rest' && d.miles).length;
   let doneRunDays = 0;
   if (planStartDate) {
@@ -8453,8 +8454,18 @@ function renderPlan() {
       statusContent = '<div class="day-status">\u2713</div>';
     } else if (isRest) {
       stateClass = ' rest';
-    } else if (hasActual) {
+    } else if (hasRun) {
+      // Planned workout completed as a run
       stateClass = ' done';
+      if (loggedRunMi) subText = loggedRunMi + 'mi';
+      if (loggedRunType && loggedRunType !== d.type) typeLabel = loggedRunType;
+      statusContent = '<div class="day-status">\u2713</div>';
+    } else if (hasStr && !hasRun) {
+      // Did strength instead of planned run
+      stateClass = ' done';
+      typeLabel = 'Strength';
+      typeClass = 'cross';
+      subText = '';
       statusContent = '<div class="day-status">\u2713</div>';
     } else if (isToday) {
       stateClass = ' today';
