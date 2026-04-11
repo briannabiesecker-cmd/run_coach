@@ -4490,25 +4490,6 @@ function loadPlan() {
     // Initialize the additional-races array if missing (for plans
     // generated before the races feature shipped)
     if (!Array.isArray(plan.races)) plan.races = [];
-    // Backfill planTemplate for plans created before the plan picker
-    if (!plan.planTemplate) {
-      // Try to derive from generatedBy (e.g. 'local-marathon_novice')
-      const gb = plan.generatedBy || '';
-      const m = gb.match(/local-(\w+)_(novice|intermediate|advanced)/);
-      if (m) {
-        const distMap = { marathon: 'Marathon', half: 'Half Marathon', '10k': '10K', '5k': '5K' };
-        const dist = distMap[m[1]] || '';
-        const tier = m[2];
-        if (dist && PLAN_OPTIONS[dist] && PLAN_OPTIONS[dist][tier]) {
-          plan.planTemplate = PLAN_OPTIONS[dist][tier].label;
-        }
-      }
-      // Fallback: use the template grid label if available
-      if (!plan.planTemplate && PLAN_TEMPLATE_GRIDS) {
-        const key = gb.replace('local-', '');
-        if (PLAN_TEMPLATE_GRIDS[key]) plan.planTemplate = PLAN_TEMPLATE_GRIDS[key].label;
-      }
-    }
     ensurePlanStartIsMonday(); // migrate old plans whose start wasn't a Monday
     return true;
   } catch(e) { return false; }
@@ -7249,6 +7230,23 @@ function renderRaceCountdownInto(elId) {
   const totalDays = plan.weeks.length * 7;
   const pct = Math.max(0, Math.min(100, 100 - (days / totalDays) * 100));
   const dateLabel = new Date(plan.raceDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  // Backfill planTemplate for plans created before the plan picker
+  if (!plan.planTemplate) {
+    const gb = plan.generatedBy || '';
+    const m = gb.match(/local-(\w+)_(novice|intermediate|advanced)/);
+    if (m) {
+      const distMap = { marathon: 'Marathon', half: 'Half Marathon', '10k': '10K', '5k': '5K' };
+      const dist = distMap[m[1]] || '';
+      const tier = m[2];
+      if (dist && PLAN_OPTIONS[dist] && PLAN_OPTIONS[dist][tier]) {
+        plan.planTemplate = PLAN_OPTIONS[dist][tier].label;
+      }
+    }
+    if (!plan.planTemplate) {
+      const key = gb.replace('local-', '');
+      if (PLAN_TEMPLATE_GRIDS[key]) plan.planTemplate = PLAN_TEMPLATE_GRIDS[key].label;
+    }
+  }
   const templateLine = plan.planTemplate
     ? `<div style="font-size:11px;color:var(--ink-light);margin-top:2px;">${escape(plan.planTemplate)}</div>`
     : '';
@@ -7303,12 +7301,13 @@ function renderHome() {
         runHeadline = escape(today.type) + (today.miles ? ` · ${today.miles} mi` : '');
         const metaParts = [];
         if (pace) metaParts.push(`Target pace ${escape(pace)}`);
-        // Duration: prefer plan's estimatedDurationMin, fall back to derived
-        let durMin = today.estimatedDurationMin;
-        if (!durMin && pace && today.miles) {
+        // Duration: always compute from pace × miles (no AI estimates)
+        let durMin = 0;
+        if (pace && today.miles) {
           const paceMid = parsePaceMinutes(pace);
           if (paceMid) durMin = Math.round(paceMid * today.miles);
         }
+        if (!durMin && today.miles) durMin = Math.round(today.miles * 11.25);
         if (durMin) metaParts.push(`~${durMin} min`);
         runMeta = metaParts.join(' · ');
       }
@@ -7601,11 +7600,13 @@ function openWorkoutDetail(weekIdx, dayIdx) {
 
   // Pace + duration
   const pace = !isRest ? getPaceForWorkout(day.type) : '';
-  let durMin = day.estimatedDurationMin;
-  if (!durMin && pace && day.miles) {
+  // Duration: always compute from pace × miles (no AI estimates)
+  let durMin = 0;
+  if (pace && day.miles) {
     const paceMid = parsePaceMinutes(pace);
     if (paceMid) durMin = Math.round(paceMid * day.miles);
   }
+  if (!durMin && day.miles) durMin = Math.round(day.miles * 11.25);
 
   // Build pill metadata
   const pills = [];
@@ -7860,12 +7861,13 @@ function renderPlan() {
     if (!isRest) {
       const pace = getPaceForWorkout(d.type);
       if (pace) metaParts.push(`${escape(pace)}`);
-      // Duration: prefer plan's estimatedDurationMin, fall back to derived
-      let durationMin = d.estimatedDurationMin;
-      if (!durationMin && pace && d.miles) {
+      // Duration: always compute from pace × miles (no AI estimates)
+      let durationMin = 0;
+      if (pace && d.miles) {
         const paceMid = parsePaceMinutes(pace);
         if (paceMid) durationMin = Math.round(paceMid * d.miles);
       }
+      if (!durationMin && d.miles) durationMin = Math.round(d.miles * 11.25);
       if (durationMin) metaParts.push(`~${durationMin} min`);
       if (d.note) metaParts.push(escape(d.note));
     } else {
