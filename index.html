@@ -4416,9 +4416,23 @@ async function pushToCloud() {
 
 // Hydrate localStorage from a cloud payload, then route to dashboard or setup.
 async function hydrateFromCloudAndRoute() {
+  // Fast path: if localStorage already has a valid plan, skip the
+  // cloud pull entirely — show the dashboard instantly, sync later.
+  if (loadPlan()) {
+    renderDashboard();
+    showView('dashboard');
+    pullFromCloud().then(function(cp) {
+      if (cp && cp.plan) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cp)); } catch(e) {}
+        loadPlan();
+        renderDashboard();
+      }
+    }).catch(function() {});
+    return;
+  }
+
+  // No local data — need cloud pull. Show loading with timeout.
   showLoading('Loading your plan…', 'Syncing from cloud');
-  // Race the cloud pull against a timeout so users aren't stuck on
-  // the loading screen if Apps Script is slow or unreachable.
   let cloudPayload = null;
   try {
     cloudPayload = await Promise.race([
@@ -4430,7 +4444,6 @@ async function hydrateFromCloudAndRoute() {
   }
 
   if (cloudPayload && cloudPayload.plan) {
-    // Sheet has data — overwrite localStorage and load
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudPayload));
     } catch(e) {}
@@ -4439,15 +4452,6 @@ async function hydrateFromCloudAndRoute() {
       showView('dashboard');
       return;
     }
-  }
-  // No cloud data — but we may have local-only data from before sync existed.
-  // If localStorage already has a valid plan, push it up so this device
-  // becomes the source of truth (one-time migration).
-  if (loadPlan()) {
-    pushToCloud(); // fire-and-forget
-    renderDashboard();
-    showView('dashboard');
-    return;
   }
   // Truly empty — go to setup
   loadRunnerProfile();
