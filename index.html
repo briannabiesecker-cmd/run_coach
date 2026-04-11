@@ -28,9 +28,9 @@
     --missed: #FF5252;
 
     --phase-base: #2979FF;
-    --phase-build: #7c3aed;
-    --phase-peak: #f97316;
-    --phase-taper: #06b6d4;
+    --phase-build: #00E676;
+    --phase-peak: #f59e0b;
+    --phase-taper: #a855f7;
     --phase-race: #ef4444;
 
     --type-easy:      #2979FF;
@@ -1226,25 +1226,50 @@
   .chart-card {
     background: var(--bg-elev);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px 12px;
+    border-radius: 16px;
+    padding: 18px 16px;
     margin-bottom: 16px;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .chart-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+  }
+  .chart-total {
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+  }
+  .chart-total-unit {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-mid);
+    margin-left: 3px;
   }
   .chart-bars {
     display: flex;
     align-items: flex-end;
-    gap: 2px;
-    height: 80px;
+    gap: 3px;
+    height: 120px;
   }
   .chart-bar {
     flex: 1;
-    border-radius: 3px 3px 0 0;
+    border-radius: 4px 4px 0 0;
     transition: height 0.3s ease;
-    min-height: 2px;
+    min-height: 3px;
   }
   .chart-bar.current {
     box-shadow: 0 0 0 2px var(--accent), 0 0 8px rgba(41,121,255,0.5);
-    border-radius: 3px 3px 0 0;
+    border-radius: 4px 4px 0 0;
   }
 
   /* ─── Plan workout list (Runna-style day-by-day) ─── */
@@ -3781,8 +3806,11 @@
       <div id="plan-week-detail"></div>
 
       <!-- Mileage chart -->
-      <div class="section-label" style="margin-top:16px;">Mileage Build</div>
-      <div class="chart-card">
+      <div class="chart-card" style="margin-top:16px;">
+        <div class="chart-header">
+          <div class="chart-title">Mileage Build</div>
+          <div id="chart-total-mi"></div>
+        </div>
         <div class="chart-bars" id="chart-bars"></div>
         <div class="chart-legend" id="chart-legend"></div>
       </div>
@@ -3913,9 +3941,9 @@ const PASSCODE_KEY = 'runCoachPasscode_v1';
 
 const PHASE_COLORS = {
   'Base': '#2979FF',
-  'Build': '#3b82f6',
-  'Bridge': '#3b82f6',
-  'Peak': '#f97316',
+  'Build': '#00E676',
+  'Bridge': '#00E676',
+  'Peak': '#f59e0b',
   'Taper': '#a855f7',
   'Race': '#ef4444',
 };
@@ -8460,12 +8488,15 @@ function renderPlan() {
 
   // Mileage chart (full plan)
   const max = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
+  const totalPlanMiles = weeks.reduce((s, w) => s + (w.totalMiles || 0), 0);
+  const totalEl = document.getElementById('chart-total-mi');
+  if (totalEl) totalEl.innerHTML = `<span class="chart-total">${Math.round(totalPlanMiles)}</span><span class="chart-total-unit">mi total</span>`;
   const barsEl = document.getElementById('chart-bars');
   barsEl.innerHTML = weeks.map((w, i) => {
-    const h = Math.round((w.totalMiles / max) * 80);
-    const color = getPhaseColor(w.phase) + '88';
+    const h = Math.round((w.totalMiles / max) * 120);
+    const color = getPhaseColor(w.phase);
     const isViewed = i === wkIdx;
-    return `<div class="chart-bar${isViewed ? ' current' : ''}" style="height:${h}px;background:${isViewed ? '#2979FF' : color};cursor:pointer;" onclick="viewedWeekIdx=${i};renderPlan();" title="Wk ${w.week}: ${w.totalMiles} mi"></div>`;
+    return `<div class="chart-bar${isViewed ? ' current' : ''}" style="height:${h}px;background:${isViewed ? '#fff' : color};opacity:${isViewed ? 1 : 0.75};cursor:pointer;" onclick="viewedWeekIdx=${i};renderPlan();" title="Wk ${w.week}: ${w.totalMiles} mi"></div>`;
   }).join('');
 
   const phases = plan.phases || [];
