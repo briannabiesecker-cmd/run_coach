@@ -1372,6 +1372,12 @@
     margin-top: 3px;
     line-height: 1.4;
   }
+  .pwr-actual {
+    font-size: 11px;
+    color: #00E676;
+    margin-top: 4px;
+    font-weight: 600;
+  }
   .pwr-meta .pwr-strength {
     color: #c4b5fd;
     font-weight: 700;
@@ -8521,6 +8527,28 @@ function renderPlan() {
     }
     const metaHTML = metaParts.length ? `<div class="pwr-meta">${metaParts.join(' · ')}</div>` : '';
 
+    // Actual logged stats (shown below planned when workout is done)
+    let actualHTML = '';
+    if (ci && (status === 'done' || status === 'modified') && !isRest) {
+      const parts = [];
+      if (ci.distance) parts.push(`${ci.distance} mi`);
+      if (ci.duration) parts.push(ci.duration);
+      if (ci.duration && ci.distance) {
+        const p = calcPace(ci.distance, ci.duration);
+        if (p) parts.push(p);
+      }
+      if (ci.avgHR) parts.push(`HR ${ci.avgHR}`);
+      if (ci.rpe) parts.push(`RPE ${ci.rpe}/10`);
+      if (parts.length) {
+        actualHTML = `<div class="pwr-actual">Logged: ${parts.join(' · ')}</div>`;
+      }
+    } else if (si && si.status === 'done') {
+      const parts = [];
+      if (si.rpe) parts.push(`RPE ${si.rpe}/10`);
+      if (si.note) parts.push(escape(si.note));
+      actualHTML = `<div class="pwr-actual">Logged: Strength${parts.length ? ' · ' + parts.join(' · ') : ''}</div>`;
+    }
+
     // Segments (PG-1) — show structured workout breakdown when present
     let segmentsHTML = '';
     if (Array.isArray(d.segments) && d.segments.length > 0) {
@@ -8560,6 +8588,7 @@ function renderPlan() {
         <div class="pwr-body">
           <div class="pwr-headline">${headline}</div>
           ${metaHTML}
+          ${actualHTML}
           ${segmentsHTML}
         </div>
         ${statusBadge}
