@@ -10003,25 +10003,38 @@ function init() {
   if (urlParams.get('code') && urlParams.get('scope')) {
     const stravaCode = urlParams.get('code');
     window.history.replaceState({}, '', window.location.pathname);
-    // Forward the code to Apps Script to exchange for tokens
-    (async function() {
-      try {
-        const name = getUserName() || '';
-        const res = await postJson({
-          action: 'stravaExchangeToken',
-          passcode: getPasscode(),
-          userName: name,
-          code: stravaCode
-        });
-        if (res.error) showToast('Strava connect failed: ' + res.error, 'error');
-        else { stravaConnected = true; updateStravaUI(); showToast('Strava connected', 'success'); }
-      } catch(e) { showToast('Strava connect failed: ' + e.message, 'error'); }
-    })();
+    // Store code so we can retry if the exchange fails
+    sessionStorage.setItem('strava_pending_code', stravaCode);
   }
-  if (urlParams.get('stravaConnected') === '1') {
-    window.history.replaceState({}, '', window.location.pathname);
-    setTimeout(() => showToast('Strava connected', 'success'), 1000);
-  }
+  // Exchange pending code (runs after routeNext ensures userName/passcode are set)
+  setTimeout(async function() {
+    const pendingCode = sessionStorage.getItem('strava_pending_code');
+    if (!pendingCode) return;
+    const name = getUserName();
+    const pass = getPasscode();
+    if (!name || !pass) return; // not logged in yet, will retry next load
+    sessionStorage.removeItem('strava_pending_code');
+    try {
+      showToast('Connecting to Strava...', '');
+      const res = await postJson({
+        action: 'stravaExchangeToken',
+        passcode: pass,
+        userName: name,
+        code: pendingCode
+      });
+      if (res.error) {
+        showToast('Strava connect failed: ' + res.error, 'error');
+        console.warn('Strava exchange error:', res.error);
+      } else {
+        stravaConnected = true;
+        updateStravaUI();
+        showToast('Strava connected', 'success');
+      }
+    } catch(e) {
+      showToast('Strava connect failed: ' + e.message, 'error');
+      console.warn('Strava exchange exception:', e);
+    }
+  }, 3000); // delay to let routeNext/hydrate finish first
 
   // Check Strava connection status (background)
   setTimeout(checkStravaStatus, 2000);
