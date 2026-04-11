@@ -4658,17 +4658,15 @@ function calcPace(distance, duration) {
 let reviewLoading = false;
 
 function getReviewableWeekIdx() {
-  // Return the most recent week with check-in data, but not the current week
-  // (we want to review COMPLETED weeks, or current week if it has data)
+  // Return the most recent COMPLETED week with check-in data.
+  // Never review the current week — it isn't finished yet, so
+  // missing days would look like missed workouts.
   if (!plan || !plan.weeks) return null;
   const currentIdx = getCurrentWeekIndex();
-  // Prefer the previous completed week if it has data
-  if (currentIdx >= 1) {
-    const prevWeek = plan.weeks[currentIdx - 1];
-    if (prevWeek && weekHasAnyCheckIn(currentIdx - 1)) return currentIdx - 1;
+  // Walk backwards from the week before the current one
+  for (let i = currentIdx - 1; i >= 0; i--) {
+    if (weekHasAnyCheckIn(i)) return i;
   }
-  // Otherwise, current week if it has data
-  if (weekHasAnyCheckIn(currentIdx)) return currentIdx;
   return null;
 }
 
@@ -8425,10 +8423,15 @@ function renderSparkline() {
 
   // ─── Actual: area fill + line + dots (only completed weeks with logged data) ───
   const currentIdx = getCurrentWeekIndex();
+  const todayDayIdx = getCurrentDayIndex();
   const actualPts = [];
   for (let i = 0; i <= currentIdx && i < N; i++) {
     const a = actualMilesForWeek(i);
-    actualPts.push({ x: wx(i), y: wy(a), mi: a, planned: weeks[i].totalMiles || 0 });
+    // For the current (in-progress) week, scale planned to days elapsed
+    const planned = (i === currentIdx)
+      ? plannedMilesThroughDay(i, todayDayIdx)
+      : (weeks[i].totalMiles || 0);
+    actualPts.push({ x: wx(i), y: wy(a), mi: a, planned });
   }
   let actualAreaSvg = '';
   let actualLineSvg = '';
