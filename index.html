@@ -7600,10 +7600,10 @@ function buildWorkoutBriefing(wkIdx, dayIdx) {
   const lines = [];
 
   // Phase context
-  if (phase === 'Base') lines.push(`Week ${weekNum} of base building — consistency matters more than pace.`);
-  else if (phase === 'Build') lines.push(`Week ${weekNum}, build phase — intensity is increasing. Respect the easy days.`);
-  else if (phase === 'Peak') lines.push(`Week ${weekNum}, peak phase — you're at your highest training load. Stay disciplined.`);
-  else if (phase === 'Taper') lines.push(`Week ${weekNum}, taper — volume is dropping. You're sharper than you feel.`);
+  if (phase === 'Base') lines.push(`Week ${weekNum}, base phase. Consistency over pace.`);
+  else if (phase === 'Build') lines.push(`Week ${weekNum}, build phase. Respect the easy days.`);
+  else if (phase === 'Peak') lines.push(`Week ${weekNum}, peak phase. Highest training load.`);
+  else if (phase === 'Taper') lines.push(`Week ${weekNum}, taper. You're sharper than you feel.`);
 
   // Yesterday context
   if (dayIdx > 0) {
