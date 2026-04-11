@@ -8402,18 +8402,7 @@ function renderPlan() {
     const isFuture = isCurrentWeek ? i > todayDayIdx : wkIdx > getCurrentWeekIndex();
     const isToday = isCurrentWeek && i === todayDayIdx;
     const onClick = `onclick="openWorkoutDetail(${wkIdx}, ${i})"`;
-    // Check completion
-    let hasActual = false;
-    if (planStartDate) {
-      const md = new Date(planStartDate + 'T00:00:00');
-      md.setDate(md.getDate() + wkIdx * 7 + i);
-      const iso = md.toISOString().slice(0, 10);
-      const ci = checkIns[iso] && checkIns[iso].run;
-      const si = checkIns[iso] && checkIns[iso].strength;
-      if (ci && (ci.status === 'done' || ci.status === 'modified')) hasActual = true;
-      if (!hasActual && si && si.status === 'done') hasActual = true;
-    }
-    // Determine what was actually logged on this day
+    // Check what was actually logged on this day
     let hasRun = false, hasStr = false, loggedRunMi = 0, loggedRunType = '';
     if (planStartDate) {
       const ld = new Date(planStartDate + 'T00:00:00');
@@ -8424,10 +8413,11 @@ function renderPlan() {
       if (lci && (lci.status === 'done' || lci.status === 'modified')) {
         hasRun = true;
         loggedRunMi = lci.distance || 0;
-        loggedRunType = lci.actualType || 'Run';
+        loggedRunType = lci.actualType || d.type || 'Run';
       }
       if (lsi && lsi.status === 'done') hasStr = true;
     }
+    const hasActual = hasRun || hasStr;
 
     let stateClass = '';
     let typeLabel = isRest ? 'Rest' : d.type;
