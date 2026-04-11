@@ -4485,21 +4485,9 @@ async function hydrateFromCloudAndRoute() {
   if (loadPlan()) {
     renderDashboard();
     showView('dashboard');
-    pullFromCloud().then(function(cp) {
-      if (cp && cp.plan) {
-        // Only overwrite local if cloud data is newer
-        try {
-          const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-          const localTime = local.savedAt || '';
-          const cloudTime = cp.savedAt || '';
-          if (cloudTime > localTime) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cp));
-            loadPlan();
-            renderDashboard();
-          }
-        } catch(e) {}
-      }
-    }).catch(function() {});
+    // Background cloud pull disabled — local data is authoritative.
+    // Cloud sync happens via pushToCloud() after every save.
+    // Pull only happens on fresh devices with no local data (below).
     return;
   }
 
