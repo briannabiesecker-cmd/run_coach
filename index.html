@@ -10015,6 +10015,7 @@ function init() {
     if (!name || !pass) return; // not logged in yet, will retry next load
     sessionStorage.removeItem('strava_pending_code');
     try {
+      console.log('Strava: exchanging code for token, userName=' + name);
       showToast('Connecting to Strava...', '');
       const res = await postJson({
         action: 'stravaExchangeToken',
@@ -10022,6 +10023,7 @@ function init() {
         userName: name,
         code: pendingCode
       });
+      console.log('Strava exchange response:', JSON.stringify(res));
       if (res.error) {
         showToast('Strava connect failed: ' + res.error, 'error');
         console.warn('Strava exchange error:', res.error);
@@ -10034,7 +10036,7 @@ function init() {
       showToast('Strava connect failed: ' + e.message, 'error');
       console.warn('Strava exchange exception:', e);
     }
-  }, 3000); // delay to let routeNext/hydrate finish first
+  }, 1500); // delay to let routeNext finish, but fast enough before code expires
 
   // Check Strava connection status (background)
   setTimeout(checkStravaStatus, 2000);
