@@ -3080,6 +3080,79 @@
     margin-top: 2px;
   }
   .nav-btn.active .nav-indicator { background: var(--accent); }
+  .nav-btn .nav-badge {
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 14px);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 2px solid var(--bg);
+    display: none;
+  }
+  .nav-btn.has-badge .nav-badge { display: block; }
+  .nav-btn { position: relative; }
+
+  /* Toast */
+  .toast-container {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .toast {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--ink);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: auto;
+    max-width: 320px;
+    text-align: center;
+  }
+  .toast.visible { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--accent-border); color: var(--accent); }
+  .toast.error   { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+
+  /* Home feed notification cards */
+  .feed-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .feed-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--ink-mid);
+    line-height: 1.5;
+  }
+  .feed-card .feed-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .feed-card .feed-body { flex: 1; }
+  .feed-card .feed-title { font-weight: 700; color: var(--ink); font-size: 12px; }
+  .feed-card .feed-desc { margin-top: 2px; }
+  .feed-card .feed-action {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .feed-card.warn { border-color: rgba(239,68,68,0.3); }
 
   /* Empty states */
   .empty {
@@ -3547,6 +3620,9 @@
       <!-- Top: race countdown (primary hero) -->
       <div id="race-countdown-hero"></div>
 
+      <!-- Contextual notification cards -->
+      <div id="feed-cards"></div>
+
       <!-- Workout HERO (run + strength sessions stacked) -->
       <div id="workout-hero"></div>
 
@@ -3718,26 +3794,32 @@
 <!-- Bottom nav -->
 <div id="bottom-nav" class="bottom-nav hidden">
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')">
+    <span class="nav-badge"></span>
     <span class="nav-icon">🏠</span>
     <span class="nav-label">Home</span>
     <span class="nav-indicator"></span>
   </button>
   <button class="nav-btn" data-tab="plan" onclick="switchTab('plan')">
+    <span class="nav-badge"></span>
     <span class="nav-icon">📅</span>
     <span class="nav-label">Plan</span>
     <span class="nav-indicator"></span>
   </button>
   <button class="nav-btn" data-tab="log" onclick="switchTab('log')">
+    <span class="nav-badge"></span>
     <span class="nav-icon">📓</span>
     <span class="nav-label">Log</span>
     <span class="nav-indicator"></span>
   </button>
   <button class="nav-btn" data-tab="performance" onclick="switchTab('performance')">
+    <span class="nav-badge"></span>
     <span class="nav-icon">📊</span>
     <span class="nav-label">Performance</span>
     <span class="nav-indicator"></span>
   </button>
 </div>
+
+<div class="toast-container" id="toast-container"></div>
 
 <script>
 // ════════════════════════════════════════════════════
@@ -4380,7 +4462,135 @@ function switchTab(tab) {
   });
   document.querySelectorAll('.nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
+    // Clear badge when user visits the tab
+    if (b.dataset.tab === tab) b.classList.remove('has-badge');
   });
+}
+
+// ─── TOAST NOTIFICATIONS ───
+let _toastTimer = null;
+function showToast(msg, type) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  container.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('visible')));
+  setTimeout(() => {
+    el.classList.remove('visible');
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+// ─── TAB BADGE DOTS ───
+function setTabBadge(tab, show) {
+  const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
+  if (btn) btn.classList.toggle('has-badge', show);
+}
+
+function updateTabBadges() {
+  if (!plan || !plan.weeks) return;
+
+  // Performance badge: reviewable week exists and hasn't been reviewed
+  const reviewIdx = getReviewableWeekIdx();
+  const hasUnreviewedWeek = reviewIdx != null && !weeklyReviews[String(reviewIdx)];
+  setTabBadge('performance', hasUnreviewedWeek);
+
+  // Home badge: today has a planned workout that isn't logged yet
+  const todayCI = checkIns[todayISO()] && checkIns[todayISO()].run;
+  const dayIdx = getCurrentDayIndex();
+  const wkIdx = getCurrentWeekIndex();
+  const week = plan.weeks[wkIdx];
+  const todayWorkout = week && week.days && week.days[dayIdx];
+  const todayNeedsLog = todayWorkout && todayWorkout.type !== 'Rest' && !todayCI;
+  // Only badge home if user isn't already on home tab
+  const onHome = document.querySelector('.nav-btn[data-tab="home"]');
+  setTabBadge('home', todayNeedsLog && onHome && !onHome.classList.contains('active'));
+}
+
+// ─── HOME FEED CARDS ───
+function renderFeedCards() {
+  const el = document.getElementById('feed-cards');
+  if (!el || !plan || !plan.weeks) { if (el) el.innerHTML = ''; return; }
+
+  const cards = [];
+  const today = todayISO();
+  const dayIdx = getCurrentDayIndex();
+  const wkIdx = getCurrentWeekIndex();
+  const week = plan.weeks[wkIdx];
+
+  // 1. Yesterday's unlogged workout
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const yesterdayISO = y.toISOString().slice(0, 10);
+  const yesterdayCI = checkIns[yesterdayISO] && checkIns[yesterdayISO].run;
+  const yesterdayDayIdx = (dayIdx + 6) % 7; // day before today in Mon=0 system
+  const yesterdayWorkout = week && week.days && week.days[yesterdayDayIdx];
+  // Only show if yesterday is within this plan week (not crossing week boundary at Mon)
+  if (dayIdx > 0 && yesterdayWorkout && yesterdayWorkout.type !== 'Rest' && !yesterdayCI) {
+    const mi = yesterdayWorkout.miles ? ` (${yesterdayWorkout.miles} mi ${yesterdayWorkout.type})` : '';
+    cards.push({
+      icon: '📝',
+      title: 'Log yesterday\'s run',
+      desc: `You had a workout planned${mi} — log it or mark it skipped so your stats stay accurate.`,
+      action: 'Log now',
+      onclick: `openManualForm('${yesterdayISO}', null)`
+    });
+  }
+
+  // 2. Tomorrow's long run heads-up
+  const tomorrowDayIdx = (dayIdx + 1) % 7;
+  const tomorrowWeek = (tomorrowDayIdx === 0 && wkIdx + 1 < plan.weeks.length)
+    ? plan.weeks[wkIdx + 1] : week;
+  const tomorrowWorkout = tomorrowWeek && tomorrowWeek.days && tomorrowWeek.days[tomorrowDayIdx];
+  if (tomorrowWorkout && tomorrowWorkout.type === 'Long') {
+    cards.push({
+      icon: '🍝',
+      title: `${tomorrowWorkout.miles} mi long run tomorrow`,
+      desc: 'Carb up tonight. Lay out your gear. Plan your fueling if it\'s over 90 min.'
+    });
+  }
+
+  // 3. Elevated soreness
+  const todayWellness = getWellness(today);
+  if (todayWellness && todayWellness.soreness >= 7) {
+    const todayWorkout = week && week.days && week.days[dayIdx];
+    const isHard = todayWorkout && ['Tempo', 'Intervals', 'Hill Repeats', 'Long'].includes(todayWorkout.type);
+    if (isHard) {
+      cards.push({
+        icon: '⚠️',
+        title: 'Soreness is elevated',
+        desc: `You logged ${todayWellness.soreness}/10 soreness. Consider swapping today's ${todayWorkout.type} for an easy run.`,
+        warn: true
+      });
+    }
+  }
+
+  // 4. Weekly review available
+  const reviewIdx = getReviewableWeekIdx();
+  if (reviewIdx != null && !weeklyReviews[String(reviewIdx)]) {
+    const reviewWk = plan.weeks[reviewIdx];
+    cards.push({
+      icon: '📋',
+      title: `Week ${reviewWk ? reviewWk.week : reviewIdx + 1} review ready`,
+      desc: 'Your coach can review last week\'s training and suggest adjustments.',
+      action: 'Go to review',
+      onclick: "switchTab('performance')"
+    });
+  }
+
+  if (!cards.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = '<div class="feed-cards">' + cards.map(c => `
+    <div class="feed-card${c.warn ? ' warn' : ''}">
+      <div class="feed-icon">${c.icon}</div>
+      <div class="feed-body">
+        <div class="feed-title">${escape(c.title)}</div>
+        <div class="feed-desc">${escape(c.desc)}</div>
+        ${c.action ? `<span class="feed-action" onclick="${c.onclick}">${escape(c.action)} &rarr;</span>` : ''}
+      </div>
+    </div>
+  `).join('') + '</div>';
 }
 
 // ════════════════════════════════════════════════════
@@ -4575,9 +4785,11 @@ function submitCheckIn() {
     if (checkInForm.actualType) data.actualType = checkInForm.actualType;
   }
   saveCheckIn(todayISO(), checkInForm.type, data);
+  const toastMsg = data.status === 'skipped' ? 'Workout skipped' : 'Workout logged';
   checkInForm = { type: null, status: null, rpe: null, note: '', distance: '', duration: '', avgHR: '', actualType: '' };
   renderHome();
   renderPerformance();
+  showToast(toastMsg, 'success');
 }
 
 function cancelCheckIn() {
@@ -5223,6 +5435,7 @@ function submitManualWorkout() {
 
   closeManualForm();
   renderDashboard();
+  showToast('Workout saved', 'success');
 }
 
 function openSettingsMenu() {
@@ -5359,6 +5572,7 @@ function submitSwitchPlan() {
     invalidateDynamicPaceCache();
     renderDashboard();
     closeSwitchPlanModal();
+    showToast('Plan rebuilt', 'success');
   } catch(e) {
     alertEl.textContent = 'Error: ' + e.message;
     alertEl.classList.remove('hidden');
@@ -6681,6 +6895,7 @@ async function submitForm() {
     savePlan(generatedPlan, { isNewPlan: true });
     renderDashboard();
     showView('dashboard');
+    showToast('Plan created', 'success');
   } catch(e) {
     showView('setup');
     showFormAlert('Could not build plan: ' + e.message);
@@ -7326,6 +7541,10 @@ function renderHome() {
 
   // ─── Race countdown hero (top) ───
   renderRaceCountdownInto('race-countdown-hero');
+
+  // ─── Feed notification cards ───
+  renderFeedCards();
+  updateTabBadges();
 
   // ─── Workout hero ───
   const heroEl = document.getElementById('workout-hero');
