@@ -374,13 +374,13 @@
     background: var(--bg-elev);
     border: 1px solid var(--border);
     border-radius: 16px;
-    padding: 14px 16px;
+    padding: 16px 14px 18px;
     margin-bottom: 12px;
   }
   .week-strip-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
-    color: var(--ink-light);
+    color: rgba(255,255,255,0.6);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 10px;
@@ -617,98 +617,102 @@
   /* ─── Day strip ────────────────────────────────── */
   .day-strip {
     display: flex;
-    gap: 5px;
+    gap: 6px;
     margin-top: 16px;
     position: relative;
     z-index: 1;
   }
   .day-cell {
     flex: 1;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    padding: 8px 2px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1.5px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 10px 2px 12px;
     text-align: center;
     position: relative;
   }
   .day-cell .day-letter {
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 800;
-    color: var(--ink-dim);
-    letter-spacing: 0.5px;
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.3px;
   }
   .day-cell .day-type-bar {
-    width: 20px;
+    width: 22px;
     height: 3px;
     border-radius: 2px;
-    background: var(--ink-dim);
-    margin: 6px auto 0;
-    opacity: 0.4;
+    background: rgba(255,255,255,0.12);
+    margin: 8px auto 0;
   }
-  .day-cell .day-type-bar.easy   { background: #00C896; opacity: 0.5; }
-  .day-cell .day-type-bar.long   { background: #f59e0b; opacity: 0.7; }
-  .day-cell .day-type-bar.tempo  { background: #ef4444; opacity: 0.7; }
-  .day-cell .day-type-bar.intervals { background: #ec4899; opacity: 0.7; }
+  .day-cell .day-type-bar.easy   { background: #00C896; }
+  .day-cell .day-type-bar.long   { background: #f59e0b; }
+  .day-cell .day-type-bar.tempo  { background: #ef4444; }
+  .day-cell .day-type-bar.intervals { background: #ec4899; }
   .day-cell .day-type-bar.rest   { background: transparent; }
-  .day-cell .day-type-bar.cross  { background: #8b5cf6; opacity: 0.5; }
+  .day-cell .day-type-bar.cross  { background: #8b5cf6; }
   .day-cell .day-sub {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--ink-light);
-    margin-top: 5px;
+    font-size: 13px;
+    font-weight: 800;
+    color: rgba(255,255,255,0.7);
+    margin-top: 6px;
   }
   .day-cell .day-status {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
-    margin: 6px auto 0;
+    margin: 8px auto 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 800;
   }
-  /* Rest day — no status circle */
-  .day-cell.rest { opacity: 0.5; }
-  .day-cell.rest .day-sub { color: var(--ink-dim); }
+  /* Rest day */
+  .day-cell.rest { opacity: 0.35; }
+  .day-cell.rest .day-sub { font-weight: 600; }
   .day-cell.rest .day-status { display: none; }
   /* Future day — hollow circle */
   .day-cell.future .day-status {
-    border: 1.5px solid rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.15);
     background: transparent;
   }
   /* Done — filled green circle with check */
   .day-cell.done {
-    background: rgba(0,200,150,0.1);
-    border-color: rgba(0,200,150,0.25);
+    background: rgba(0,200,150,0.12);
+    border-color: rgba(0,200,150,0.35);
   }
-  .day-cell.done .day-letter { color: var(--accent); }
-  .day-cell.done .day-sub { color: var(--accent); }
+  .day-cell.done .day-letter { color: #00C896; }
+  .day-cell.done .day-sub { color: #00C896; }
   .day-cell.done .day-status {
-    background: var(--accent);
+    background: #00C896;
     color: #0a1628;
   }
   /* Missed — past day, not rest, not logged */
+  .day-cell.missed {
+    background: rgba(239,68,68,0.06);
+    border-color: rgba(239,68,68,0.2);
+  }
+  .day-cell.missed .day-letter { color: rgba(239,68,68,0.7); }
+  .day-cell.missed .day-sub { color: rgba(239,68,68,0.7); }
   .day-cell.missed .day-status {
-    border: 1.5px solid rgba(239,68,68,0.5);
+    border: 2px solid rgba(239,68,68,0.5);
     background: transparent;
-    color: rgba(239,68,68,0.7);
+    color: rgba(239,68,68,0.8);
   }
-  .day-cell.missed .day-sub { color: rgba(239,68,68,0.6); }
-  /* Today — accent ring */
+  /* Today — accent ring, prominent */
   .day-cell.today {
-    background: rgba(0,200,150,0.12);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    background: rgba(0,200,150,0.1);
+    border-color: #00C896;
+    box-shadow: 0 0 0 1px #00C896;
   }
-  .day-cell.today .day-letter { color: var(--accent); font-size: 11px; }
-  .day-cell.today .day-sub { color: var(--ink); }
+  .day-cell.today .day-letter { color: #00C896; font-size: 14px; }
+  .day-cell.today .day-sub { color: #fff; }
   .day-cell.today .day-status {
-    border: 2px solid var(--accent);
+    border: 2px solid #00C896;
     background: transparent;
   }
   .day-cell.today.done .day-status {
-    background: var(--accent);
+    background: #00C896;
     border: none;
     color: #0a1628;
   }
@@ -1288,27 +1292,20 @@
   }
   .pwr-day {
     font-size: 10px;
-    font-weight: 800;
-    color: var(--ink-light);
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    width: 38px;
+    font-weight: 700;
+    color: var(--ink-mid);
+    letter-spacing: 0.3px;
+    width: 36px;
     flex-shrink: 0;
     text-align: center;
   }
   .pwr-day .pwr-day-num {
     display: block;
-    font-size: 18px;
+    font-size: 20px;
     color: var(--ink);
     font-weight: 900;
-    margin-top: 2px;
-  }
-  .pwr-icon {
-    font-size: 22px;
-    line-height: 1;
-    width: 32px;
-    text-align: center;
-    flex-shrink: 0;
+    margin-top: 1px;
+    letter-spacing: 0;
   }
   .pwr-body {
     flex: 1;
@@ -8226,8 +8223,17 @@ function renderPlan() {
   // Race countdown header (mirrors Home tab)
   renderRaceCountdownInto('plan-race-countdown');
 
-  // Week nav title
-  document.getElementById('week-nav-title').textContent = `Week ${week.week}${week.phase ? ' · ' + week.phase : ''}`;
+  // Week nav title — include date range
+  let weekDateRange = '';
+  if (planStartDate) {
+    const ws = new Date(planStartDate + 'T00:00:00');
+    ws.setDate(ws.getDate() + wkIdx * 7);
+    const we = new Date(ws);
+    we.setDate(we.getDate() + 6);
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    weekDateRange = ` · ${fmt(ws)}–${fmt(we)}`;
+  }
+  document.getElementById('week-nav-title').textContent = `Week ${week.week}${weekDateRange}`;
   // Disable nav buttons at edges
   const navBtns = document.querySelectorAll('.week-nav-btn');
   if (navBtns[0]) navBtns[0].disabled = wkIdx <= 0;
@@ -8270,8 +8276,15 @@ function renderPlan() {
     const isToday = isCurrentWeek && i === todayDayIdx;
     const isLong = i === longRunIdx && !isRest && !isRace;
     const miniClasses = ['day-mini', isRest && 'rest', isToday && 'today', isLong && 'long-run', isRace && 'race'].filter(Boolean).join(' ');
-    const valHtml = isRace ? '🏁' : (isRest ? '—' : d.miles);
-    return `<div class="${miniClasses}" ${onClick}><div class="label">${dayLabels[i]}</div><div class="val">${valHtml}</div>${strMark}</div>`;
+    const valHtml = isRace ? 'R' : (isRest ? '—' : d.miles);
+    // Date number for mini grid
+    let miniDateNum = '';
+    if (planStartDate) {
+      const md = new Date(planStartDate + 'T00:00:00');
+      md.setDate(md.getDate() + wkIdx * 7 + i);
+      miniDateNum = String(md.getDate());
+    }
+    return `<div class="${miniClasses}" ${onClick}><div class="label">${dayLabels[i]} ${miniDateNum}</div><div class="val">${valHtml}</div>${strMark}</div>`;
   }).join('');
   const strengthPill = totalStrengthSessions > 0
     ? `<span class="week-pill" style="background:rgba(168,85,247,0.2);color:#c4b5fd;">💪 ${totalStrengthSessions}x</span>`
@@ -8282,16 +8295,16 @@ function renderPlan() {
     const isLong = i === longRunIdx && !isRest;
     const dayShort = DAYS_FULL[i];
     const dayStrength = getStrengthForDay(dayShort);
-    const icon = TYPE_ICONS[d.type] || (isRest ? '💤' : '🏃');
-
     // Date for this day-cell (used to look up check-ins)
     let dateLabel = '';
+    let dateDayName = dayLabels[i];
     let cellISO = null;
     if (planStartDate) {
       const dt = new Date(planStartDate + 'T00:00:00');
       dt.setDate(dt.getDate() + wkIdx * 7 + i);
       cellISO = dt.toISOString().slice(0, 10);
       dateLabel = String(dt.getDate());
+      dateDayName = dt.toLocaleDateString('en-US', { weekday: 'short' });
     }
 
     // Completion state
@@ -8299,7 +8312,7 @@ function renderPlan() {
     const status = ci && ci.status; // 'done' | 'skipped' | 'modified' | null
     let stateClass = '';
     let statusBadge = '';
-    if (status === 'done')     { stateClass = 'done';     statusBadge = '<div class="pwr-status done">✓ Done</div>'; }
+    if (status === 'done')     { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
     else if (status === 'skipped')  { stateClass = 'skipped';  statusBadge = '<div class="pwr-status skipped">Skipped</div>'; }
     else if (status === 'modified') { stateClass = 'modified'; statusBadge = '<div class="pwr-status modified">Modified</div>'; }
 
@@ -8363,10 +8376,14 @@ function renderPlan() {
       stateClass
     ].filter(Boolean).join(' ');
 
+    // Type color for left bar
+    const typeColorMap = { Easy: '#00C896', Long: '#f59e0b', Tempo: '#ef4444', Intervals: '#ec4899', 'Hill Repeats': '#ec4899', Cross: '#8b5cf6', Strides: '#00C896' };
+    const typeColor = typeColorMap[d.type] || 'var(--border)';
+    const leftBarStyle = isRest ? '' : `border-left-color: ${typeColor};`;
+
     return `
-      <div class="${rowClasses}" ${onClick}>
-        <div class="pwr-day">${dayLabels[i]}<span class="pwr-day-num">${dateLabel || '–'}</span></div>
-        <div class="pwr-icon">${icon}</div>
+      <div class="${rowClasses}" ${onClick} style="${leftBarStyle}">
+        <div class="pwr-day">${dateDayName}<span class="pwr-day-num">${dateLabel || '–'}</span></div>
         <div class="pwr-body">
           <div class="pwr-headline">${headline}</div>
           ${metaHTML}
