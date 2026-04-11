@@ -7523,37 +7523,47 @@ function computeDynamicPaceZones() {
 
   if (allRuns.length === 0) return null;
 
-  // ── Step 2: predict 5K-equivalent time for each run via Riegel ──
-  // T_5k = T_run × (5K_dist / run_dist)^1.06
-  const FIVE_K_MI = 3.10686;
-  const RIEGEL_EXP = 1.06;
-  const predict5K = (distMi, timeMin) => {
-    return timeMin * Math.pow(FIVE_K_MI / distMi, RIEGEL_EXP);
+  // ── Step 2: compute VDOT for each run using Daniels' equations ──
+  // VO2 demand at velocity v (m/min): VO2 = -4.60 + 0.182258*v + 0.000104*v²
+  // %VO2max sustainable for t minutes: %max = 0.8 + 0.1894393*e^(-0.012778*t) + 0.2989558*e^(-0.1932605*t)
+  // VDOT = VO2 / %max
+  const MI_TO_M = 1609.344;
+  const vo2AtVelocity = (v) => -4.60 + 0.182258 * v + 0.000104 * v * v;
+  const pctVO2max = (t) => 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t);
+  const computeVDOT = (distMi, timeMin) => {
+    const v = (distMi * MI_TO_M) / timeMin; // meters per minute
+    return vo2AtVelocity(v) / pctVO2max(timeMin);
+  };
+  // Reverse: given VDOT and a target %VO2max, find pace in min/mi
+  const paceFromVDOT = (vdot, pctTarget) => {
+    const targetVO2 = vdot * pctTarget;
+    // Solve: targetVO2 = -4.60 + 0.182258*v + 0.000104*v² for v
+    // Quadratic: 0.000104*v² + 0.182258*v + (-4.60 - targetVO2) = 0
+    const a = 0.000104, b = 0.182258, c = -4.60 - targetVO2;
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return 15; // fallback
+    const v = (-b + Math.sqrt(disc)) / (2 * a); // meters/min
+    return MI_TO_M / v; // min/mi
   };
 
-  // Best (fastest) predicted 5K time — this is the runner's current fitness anchor
+  // Best (highest) VDOT — this is the runner's current fitness
   let bestEffort = null;
   allRuns.forEach(r => {
-    const pred5k = predict5K(r.distMi, r.timeMin);
-    if (!bestEffort || pred5k < bestEffort.pred5k) {
-      bestEffort = { ...r, pred5k };
+    const vdot = computeVDOT(r.distMi, r.timeMin);
+    if (!bestEffort || vdot > bestEffort.vdot) {
+      bestEffort = { ...r, vdot };
     }
   });
 
   if (!bestEffort) return null;
 
-  const fiveKPaceMin = bestEffort.pred5k / FIVE_K_MI; // min/mi at 5K pace
+  const vdot = bestEffort.vdot;
 
-  // ── Step 3: derive zones using Daniels-style offsets ──
-  // Returns {low, high} in decimal min/mi (low = faster end)
-  const zoneFromOffsets = (loSec, hiSec) => ({
-    low:  fiveKPaceMin + loSec / 60,
-    high: fiveKPaceMin + hiSec / 60
-  });
-  const easyDerived     = zoneFromOffsets(90, 120); // easy: 5K + 1:30 to 2:00
-  const marathonZone    = zoneFromOffsets(35, 45);
-  const tempoZone       = zoneFromOffsets(15, 25);
-  const intervalZone    = zoneFromOffsets(-5, 5);   // around 5K pace
+  // ── Step 3: derive training paces from VDOT using Daniels' %VO2max zones ──
+  const easyDerived  = { low: paceFromVDOT(vdot, 0.74), high: paceFromVDOT(vdot, 0.59) };
+  const marathonZone = { low: paceFromVDOT(vdot, 0.84), high: paceFromVDOT(vdot, 0.75) };
+  const tempoZone    = { low: paceFromVDOT(vdot, 0.90), high: paceFromVDOT(vdot, 0.83) };
+  const intervalZone = { low: paceFromVDOT(vdot, 1.00), high: paceFromVDOT(vdot, 0.95) };
 
   // ── Step 4: prefer measured easy pace when we have enough samples ──
   const easySamples = allRuns
@@ -7584,23 +7594,24 @@ function computeDynamicPaceZones() {
   const effortDate = new Date(bestEffort.iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const effortPace = minToPace(bestEffort.paceMin);
   const effortDist = bestEffort.distMi.toFixed(1);
-  const fiveKLabel = `${minToPace(fiveKPaceMin)}/mi`;
-  const sourceLine = `Based on your ${effortDist}mi @ ${effortPace}/mi on ${effortDate} — predicted 5K pace ${fiveKLabel}`;
+  const vdotLabel = Math.round(vdot * 10) / 10;
+  const sourceLine = `VDOT ${vdotLabel} from your ${effortDist}mi @ ${effortPace}/mi on ${effortDate}`;
 
   const result = {
     easy:     { ...fmtZone(easyZone),     reason: easySource },
     marathon: { ...fmtZone(marathonZone), reason: sourceLine },
     tempo:    { ...fmtZone(tempoZone),    reason: sourceLine },
     interval: { ...fmtZone(intervalZone), reason: sourceLine },
+    _vdot: vdotLabel,
     _sample: {
       easy: easySamples.length,
       total: allRuns.length,
       bestEffortISO: bestEffort.iso,
       bestEffortPace: effortPace,
       bestEffortDist: effortDist,
-      predicted5K: fiveKLabel
+      predicted5K: minToPace(paceFromVDOT(vdot, 1.0)) + '/mi'
     },
-    _methodology: 'riegel+daniels'
+    _methodology: 'vdot-daniels'
   };
   _dynamicPaceCache = result;
   return result;
@@ -9459,7 +9470,21 @@ function renderRacePredictions() {
   const el = document.getElementById('race-predictions');
   if (!el) return;
 
-  const RIEGEL_EXP = 1.06;
+  const MI_TO_M = 1609.344;
+  const vo2AtV = (v) => -4.60 + 0.182258 * v + 0.000104 * v * v;
+  const pctMax = (t) => 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t);
+  // Predict race time for a distance given VDOT (binary search for t where computedVDOT == target)
+  const predictRaceTime = (distMi, vdotTarget) => {
+    const distM = distMi * MI_TO_M;
+    let lo = 5, hi = 600; // search range in minutes
+    for (let iter = 0; iter < 50; iter++) {
+      const mid = (lo + hi) / 2;
+      const v = distM / mid;
+      const vd = vo2AtV(v) / pctMax(mid);
+      if (vd > vdotTarget) hi = mid; else lo = mid;
+    }
+    return (lo + hi) / 2 * 60; // seconds
+  };
   const RACE_DISTS = [
     { key: '5K',            mi: 3.10686 },
     { key: '10K',           mi: 6.21371 },
@@ -9487,17 +9512,17 @@ function renderRacePredictions() {
   const dynamicZones = computeDynamicPaceZones();
   let anchorDistMi = null, anchorTimeSec = null, sourceLabel = '';
 
-  if (dynamicZones && dynamicZones._sample && dynamicZones._sample.total >= 2) {
-    // Use the best effort from logged runs
+  let useVDOT = false, vdotScore = 0;
+  if (dynamicZones && dynamicZones._vdot && dynamicZones._sample && dynamicZones._sample.total >= 2) {
+    useVDOT = true;
+    vdotScore = dynamicZones._vdot;
     const best = dynamicZones._sample;
+    const effortDate = new Date(best.bestEffortISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    sourceLabel = `VDOT ${vdotScore} · Best of ${best.total} runs · ${best.bestEffortDist}mi @ ${best.bestEffortPace}/mi on ${effortDate}`;
+    // Set anchor for fallback path (not used when useVDOT is true)
     anchorDistMi = parseFloat(best.bestEffortDist);
-    // Reconstruct time from pace and distance
     const paceMin = parsePaceMinutes(best.bestEffortPace + '/mi');
-    if (paceMin && anchorDistMi) {
-      anchorTimeSec = paceMin * anchorDistMi * 60;
-      const effortDate = new Date(best.bestEffortISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      sourceLabel = `Based on your ${best.bestEffortDist}mi @ ${best.bestEffortPace}/mi on ${effortDate}`;
-    }
+    if (paceMin && anchorDistMi) anchorTimeSec = paceMin * anchorDistMi * 60;
   }
 
   // Fallback to goal time if no logged runs
@@ -9522,10 +9547,11 @@ function renderRacePredictions() {
     return;
   }
 
-  // Predict times via Riegel
   const targetDist = plan ? getDistanceKeyFE(plan.raceDistance || '') : '';
   const cards = RACE_DISTS.map(race => {
-    const predSec = anchorTimeSec * Math.pow(race.mi / anchorDistMi, RIEGEL_EXP);
+    const predSec = useVDOT
+      ? predictRaceTime(race.mi, vdotScore)
+      : anchorTimeSec * Math.pow(race.mi / anchorDistMi, 1.06);
     const isTarget = getDistanceKeyFE(race.key) === targetDist;
     return `<div class="predict-card${isTarget ? ' target' : ''}">
       <div class="label">${race.key}${isTarget ? ' ★' : ''}</div>
