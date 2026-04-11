@@ -4865,13 +4865,18 @@ function getDayCheckInState(wkIdx, dayIdx, plannedType) {
   if (!iso) return { hasRun: false, hasStr: false, loggedRunMi: 0, loggedRunType: '' };
   const ci = checkIns[iso] && checkIns[iso].run;
   const si = checkIns[iso] && checkIns[iso].strength;
+  const hasStr = !!(si && si.status === 'done');
   let hasRun = false, loggedRunMi = 0, loggedRunType = '';
   if (ci && (ci.status === 'done' || ci.status === 'modified')) {
+    // If both run and strength exist and strength is newer, treat as strength-only
+    if (hasStr && si.loggedAt && ci.loggedAt && si.loggedAt > ci.loggedAt) {
+      return { hasRun: false, hasStr: true, loggedRunMi: 0, loggedRunType: '' };
+    }
     hasRun = true;
     loggedRunMi = ci.distance || 0;
     loggedRunType = ci.actualType || plannedType || 'Run';
   }
-  return { hasRun, hasStr: !!(si && si.status === 'done'), loggedRunMi, loggedRunType };
+  return { hasRun, hasStr, loggedRunMi, loggedRunType };
 }
 
 const TYPE_CLASS_MAP = { Easy: 'easy', Strides: 'easy', Long: 'long', Tempo: 'tempo', Intervals: 'intervals', 'Hill Repeats': 'intervals', Cross: 'cross', Rest: 'rest' };
