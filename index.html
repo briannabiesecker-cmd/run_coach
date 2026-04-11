@@ -8693,16 +8693,14 @@ function renderPlan() {
     const a = actualMilesForWeek(i);
     const cx = barCenterX(i);
     const cy = miToY(a);
-    const onTarget = a >= (weeks[i].totalMiles || 0);
-    actualPts.push({ cx, cy, mi: a, onTarget });
+    actualPts.push({ cx, cy, mi: a });
   }
   if (actualPts.length > 0) {
     // Line
     const linePath = actualPts.map((p, j) => (j === 0 ? `M ${p.cx} ${p.cy}` : `L ${p.cx} ${p.cy}`)).join(' ');
-    actualLineSvg += `<path d="${linePath}" fill="none" stroke="#00E676" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-    // Dots
+    actualLineSvg += `<path d="${linePath}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
     actualLineSvg += actualPts.map(p =>
-      `<circle cx="${p.cx}" cy="${p.cy}" r="4" fill="${p.onTarget ? '#00E676' : '#2979FF'}" stroke="#0A0E17" stroke-width="2"/>
+      `<circle cx="${p.cx}" cy="${p.cy}" r="4" fill="#fff" stroke="#0A0E17" stroke-width="2"/>
        <text x="${p.cx}" y="${p.cy - 7}" text-anchor="middle" font-size="7.5" fill="#fff" font-weight="700" font-family="inherit">${Math.round(p.mi)}</text>`
     ).join('');
   }
@@ -8715,7 +8713,7 @@ function renderPlan() {
     `<div class="legend-item"><div class="legend-dot" style="background:${getPhaseColor(p.name)}"></div><span class="legend-label">${escape(p.name)}</span></div>`
   ).join('');
   const actualLegend = currentWkIdx >= 0
-    ? '<div class="legend-item" style="margin-left:8px;"><div class="legend-dot" style="background:#00E676;border-radius:50%;width:8px;height:8px;"></div><span class="legend-label">Actual</span></div>'
+    ? '<div class="legend-item" style="margin-left:8px;"><div class="legend-dot" style="background:#fff;border-radius:50%;width:8px;height:8px;"></div><span class="legend-label">Actual</span></div>'
     : '';
   document.getElementById('chart-legend').innerHTML = phaseLegend + actualLegend;
 }
