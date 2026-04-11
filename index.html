@@ -4453,9 +4453,18 @@ async function hydrateFromCloudAndRoute() {
       return;
     }
   }
+  // Try localStorage one more time (belt and suspenders)
+  if (loadPlan()) {
+    renderDashboard();
+    showView('dashboard');
+    return;
+  }
   // Truly empty — go to setup
   loadRunnerProfile();
   showView('setup');
+  if (cloudPayload === null && getUserName()) {
+    showToast('Could not load from cloud — create a new plan or try again', 'error');
+  }
 }
 
 function hasConsent() {
