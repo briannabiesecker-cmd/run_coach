@@ -8626,8 +8626,11 @@ function renderPlan() {
       <text x="${padL - 4}" y="${y + 3}" text-anchor="end" font-size="9" fill="rgba(255,255,255,0.35)" font-family="inherit">${v}</text>`;
   }).join('');
 
-  // Bars + X labels — dual bars for completed weeks (planned + actual)
+  // Planned bars + actual mileage line overlay
   const currentWkIdx = getCurrentWeekIndex();
+  const barCenterX = (i) => padL + i * (barW + gap) + barW / 2;
+  const miToY = (mi) => padTop + chartH - (mi / max) * chartH;
+
   const bars = weeks.map((w, i) => {
     const x = padL + i * (barW + gap);
     const plannedMi = w.totalMiles || 0;
@@ -8635,35 +8638,20 @@ function renderPlan() {
     const y = padTop + chartH - h;
     const color = getPhaseColor(w.phase);
     const isViewed = i === wkIdx;
-    const isPast = i < currentWkIdx;
-    const isCurrent = i === currentWkIdx;
+    const isPast = i <= currentWkIdx;
 
     let barSVG = '';
-    if (isPast || isCurrent) {
-      // Completed or in-progress week: show planned (dimmed) + actual (bright) side by side
-      const actual = actualMilesForWeek(i);
-      const halfW = Math.floor(barW / 2) - 1;
-      // Planned bar (left, dimmed)
-      barSVG += `<rect x="${x}" y="${y}" width="${halfW}" height="${h}" rx="2" fill="${color}" opacity="0.25" cursor="pointer" onclick="viewedWeekIdx=${i};renderPlan();"/>`;
-      // Actual bar (right, bright green or phase color)
-      const aH = Math.max(2, Math.round((actual / max) * chartH));
-      const aY = padTop + chartH - aH;
-      const aColor = actual >= plannedMi ? '#00E676' : '#2979FF';
-      barSVG += `<rect x="${x + halfW + 2}" y="${aY}" width="${halfW}" height="${aH}" rx="2" fill="${aColor}" opacity="0.9" cursor="pointer" onclick="viewedWeekIdx=${i};renderPlan();"/>`;
-      // Mile label shows actual
-      const labelY = Math.min(y, aY) - 3;
-      barSVG += `<text x="${x + barW / 2}" y="${labelY}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,0.6)" font-family="inherit">${Math.round(actual)}</text>`;
-    } else {
-      // Future week: single planned bar
-      const fill = isViewed ? '#fff' : color;
-      const op = isViewed ? 1 : 0.55;
-      barSVG += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="${fill}" opacity="${op}" cursor="pointer" onclick="viewedWeekIdx=${i};renderPlan();"/>`;
-      barSVG += `<text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,${isViewed ? '0.9' : '0.25'})" font-family="inherit">${Math.round(plannedMi)}</text>`;
-    }
+    // Planned bar — dimmed for past weeks, normal for future
+    const op = isPast ? 0.35 : (isViewed ? 1 : 0.6);
+    const fill = isViewed ? '#fff' : color;
+    barSVG += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="${fill}" opacity="${op}" cursor="pointer" onclick="viewedWeekIdx=${i};renderPlan();"/>`;
+
+    // Mile label
+    barSVG += `<text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,${isViewed ? '0.9' : '0.25'})" font-family="inherit">${Math.round(plannedMi)}</text>`;
 
     // Selection outline
     if (isViewed) {
-      barSVG += `<rect x="${x - 1}" y="${Math.min(y, padTop + chartH - 2) - 1}" width="${barW + 2}" height="${Math.max(h, 2) + 2}" rx="4" fill="none" stroke="${color}" stroke-width="2"/>`;
+      barSVG += `<rect x="${x - 1}" y="${y - 1}" width="${barW + 2}" height="${h + 2}" rx="4" fill="none" stroke="${color}" stroke-width="2"/>`;
     }
 
     // X-axis label
@@ -8678,19 +8666,39 @@ function renderPlan() {
       barSVG += `<text x="${x + barW / 2}" y="${padTop + chartH + 14}" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,0.4)" font-family="inherit">Wk ${w.week}</text>
         <text x="${x + barW / 2}" y="${padTop + chartH + 24}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,0.25)" font-family="inherit">${dateStr}</text>`;
     }
-
     return barSVG;
   }).join('');
 
+  // Actual mileage line + dots (overlaid on top of bars)
+  let actualLineSvg = '';
+  const actualPts = [];
+  for (let i = 0; i <= currentWkIdx && i < N; i++) {
+    const a = actualMilesForWeek(i);
+    const cx = barCenterX(i);
+    const cy = miToY(a);
+    const onTarget = a >= (weeks[i].totalMiles || 0);
+    actualPts.push({ cx, cy, mi: a, onTarget });
+  }
+  if (actualPts.length > 0) {
+    // Line
+    const linePath = actualPts.map((p, j) => (j === 0 ? `M ${p.cx} ${p.cy}` : `L ${p.cx} ${p.cy}`)).join(' ');
+    actualLineSvg += `<path d="${linePath}" fill="none" stroke="#00E676" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // Dots
+    actualLineSvg += actualPts.map(p =>
+      `<circle cx="${p.cx}" cy="${p.cy}" r="4" fill="${p.onTarget ? '#00E676' : '#2979FF'}" stroke="#0A0E17" stroke-width="2"/>
+       <text x="${p.cx}" y="${p.cy - 7}" text-anchor="middle" font-size="7.5" fill="#fff" font-weight="700" font-family="inherit">${Math.round(p.mi)}</text>`
+    ).join('');
+  }
+
   document.getElementById('chart-svg-wrap').innerHTML =
-    `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${yLines}${bars}</svg>`;
+    `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${yLines}${bars}${actualLineSvg}</svg>`;
 
   const phases = plan.phases || [];
   const phaseLegend = phases.map(p =>
     `<div class="legend-item"><div class="legend-dot" style="background:${getPhaseColor(p.name)}"></div><span class="legend-label">${escape(p.name)}</span></div>`
   ).join('');
   const actualLegend = currentWkIdx >= 0
-    ? '<div class="legend-item" style="margin-left:8px;"><div class="legend-dot" style="background:#2979FF"></div><span class="legend-label">Actual</span></div><div class="legend-item"><div class="legend-dot" style="background:#00E676"></div><span class="legend-label">On target</span></div>'
+    ? '<div class="legend-item" style="margin-left:8px;"><div class="legend-dot" style="background:#00E676;border-radius:50%;width:8px;height:8px;"></div><span class="legend-label">Actual</span></div>'
     : '';
   document.getElementById('chart-legend').innerHTML = phaseLegend + actualLegend;
 }
