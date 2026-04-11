@@ -8412,7 +8412,9 @@ function renderPlan() {
   if (navBtns[0]) navBtns[0].disabled = wkIdx <= 0;
   if (navBtns[1]) navBtns[1].disabled = wkIdx >= weeks.length - 1;
 
-  // Progress segments + workouts completed (count any logged 'done' run in the week)
+  // Progress segments + workouts completed
+  // Count run (done or modified) OR strength-only as completed — same
+  // logic as the Home week strip so the two tabs stay in sync.
   const dayLabels = ['M','T','W','T','F','S','S'];
   const totalRunDays = (week.days || []).filter(d => d.type !== 'Rest' && d.miles).length;
   let doneRunDays = 0;
@@ -8422,7 +8424,9 @@ function renderPlan() {
       date.setDate(date.getDate() + wkIdx * 7 + i);
       const iso = date.toISOString().slice(0, 10);
       const ci = checkIns[iso] && checkIns[iso].run;
-      if (ci && ci.status === 'done') doneRunDays++;
+      const si = checkIns[iso] && checkIns[iso].strength;
+      if (ci && (ci.status === 'done' || ci.status === 'modified')) doneRunDays++;
+      else if (si && si.status === 'done') doneRunDays++;
     }
   }
   const segments = [];
@@ -8480,14 +8484,16 @@ function renderPlan() {
       dateDayName = dt.toLocaleDateString('en-US', { weekday: 'short' });
     }
 
-    // Completion state
+    // Completion state — check run OR strength (same logic as week strip)
     const ci = cellISO && checkIns[cellISO] && checkIns[cellISO].run;
-    const status = ci && ci.status; // 'done' | 'skipped' | 'modified' | null
+    const si = cellISO && checkIns[cellISO] && checkIns[cellISO].strength;
+    const status = ci ? ci.status : null;
     let stateClass = '';
     let statusBadge = '';
-    if (status === 'done')     { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
+    if (status === 'done')          { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
     else if (status === 'skipped')  { stateClass = 'skipped';  statusBadge = '<div class="pwr-status skipped">Skipped</div>'; }
     else if (status === 'modified') { stateClass = 'modified'; statusBadge = '<div class="pwr-status modified">Modified</div>'; }
+    else if (si && si.status === 'done' && !isRest) { stateClass = 'done'; statusBadge = '<div class="pwr-status done">Strength</div>'; }
 
     // Headline
     let headline;
