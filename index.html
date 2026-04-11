@@ -7717,13 +7717,13 @@ function renderHome() {
         }).join('') + '</div>';
       }
 
+      const isRun = ['Easy', 'Long', 'Tempo', 'Intervals', 'Hill Repeats'].includes(today.type);
       let runCtaLabel, runCtaClass, runCtaAction;
       if (runLogged) {
         runCtaLabel = `✓ Done · RPE ${runCheckIn.rpe || '—'}`;
         runCtaClass = 'workout-hero-session-cta done';
         runCtaAction = `onclick="openCheckInForm('run', ${JSON.stringify(runCheckIn).replace(/"/g, '&quot;')})"`;
       } else {
-        const isRun = ['Easy', 'Long', 'Tempo', 'Intervals', 'Hill Repeats'].includes(today.type);
         runCtaLabel = isRest ? 'Mark complete' : isRun ? 'Log run →' : 'Log workout →';
         runCtaClass = 'workout-hero-session-cta';
         runCtaAction = `onclick="openCheckInForm('run')"`;
