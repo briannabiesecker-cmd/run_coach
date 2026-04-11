@@ -1485,7 +1485,9 @@
   .wd-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.65);
+    background: rgba(4,6,14,0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     z-index: 999;
     display: none;
     animation: wd-fade 0.18s ease;
@@ -1500,15 +1502,16 @@
     transform: translateX(-50%) translateY(100%);
     width: 100%;
     max-width: 430px;
-    background: var(--bg-elev);
+    background: linear-gradient(165deg, #141B2E 0%, #0D1220 100%);
     border-top-left-radius: 22px;
     border-top-right-radius: 22px;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(41,121,255,0.2);
     border-bottom: none;
     z-index: 1000;
     max-height: 85vh;
     overflow-y: auto;
     transition: transform 0.22s ease;
+    box-shadow: 0 -10px 50px rgba(0,0,0,0.5), 0 0 80px rgba(41,121,255,0.06);
   }
   .wd-sheet.open {
     transform: translateX(-50%) translateY(0);
