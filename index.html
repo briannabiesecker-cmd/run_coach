@@ -3094,6 +3094,29 @@
   .nav-btn.has-badge .nav-badge { display: block; }
   .nav-btn { position: relative; }
 
+  /* FAB — floating add-workout button */
+  .fab {
+    position: fixed;
+    bottom: 84px;
+    right: 16px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #0a1628;
+    border: none;
+    font-size: 24px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,200,150,0.35);
+    z-index: 50;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .fab:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(0,200,150,0.25); }
+
   /* Toast */
   .toast-container {
     position: fixed;
@@ -3779,6 +3802,7 @@
         <label>Type</label>
         <select id="manual-type" onchange="onManualTypeChange(this.value)">
           <option value="run">Run</option>
+          <option value="cross">Cross-training</option>
           <option value="strength">Strength</option>
         </select>
       </div>
@@ -3790,6 +3814,9 @@
     <button class="btn-ghost" onclick="closeManualForm()">Cancel</button>
   </div>
 </div>
+
+<!-- FAB — add a workout -->
+<button id="fab-add" class="fab hidden" onclick="openManualForm()" title="Log a workout">+</button>
 
 <!-- Bottom nav -->
 <div id="bottom-nav" class="bottom-nav hidden">
@@ -3908,6 +3935,7 @@ function showView(name) {
     document.getElementById('view-' + v).classList.toggle('hidden', v !== name);
   });
   document.getElementById('bottom-nav').classList.toggle('hidden', name !== 'dashboard');
+  document.getElementById('fab-add').classList.toggle('hidden', name !== 'dashboard');
   if (name === 'setup') prefillSetupForm();
   if (name === 'name') loadExistingProfiles();
 }
@@ -5238,7 +5266,9 @@ let manualForm = {
 const RUN_TYPES = ['Easy', 'Long', 'Tempo', 'Intervals', 'Cross', 'Other'];
 
 function openManualForm(existingDate, existingType) {
+  let isEditing = false;
   if (existingDate && existingType && checkIns[existingDate] && checkIns[existingDate][existingType]) {
+    isEditing = true;
     const d = checkIns[existingDate][existingType];
     manualForm = {
       editingDate: existingDate,
@@ -5257,7 +5287,7 @@ function openManualForm(existingDate, existingType) {
     manualForm = {
       editingDate: null,
       editingType: null,
-      date: todayISO(),
+      date: existingDate || todayISO(),
       type: 'run',
       status: 'done',
       rpe: null,
@@ -5268,6 +5298,13 @@ function openManualForm(existingDate, existingType) {
       actualType: 'Easy'
     };
   }
+  // Update modal title based on context
+  const titleEl = document.querySelector('#manual-modal .modal-title');
+  const subEl = document.querySelector('#manual-modal .modal-sub');
+  if (titleEl) titleEl.textContent = isEditing ? 'Edit workout' : 'Log a workout';
+  if (subEl) subEl.textContent = isEditing
+    ? 'Update this workout entry'
+    : 'Add a run, cross-training, or strength session';
   document.getElementById('manual-date').value = manualForm.date;
   document.getElementById('manual-type').value = manualForm.type;
   renderManualFormBody();
@@ -5381,12 +5418,40 @@ function renderManualFormBody() {
     `;
   }
 
+  // Cross-training fields
+  let crossBlock = '';
+  if (manualForm.type === 'cross') {
+    const crossTypes = ['Cycling', 'Swimming', 'Yoga', 'Elliptical', 'Walking', 'Other'];
+    const crossOptions = crossTypes.map(t =>
+      `<option value="${t}"${manualForm.actualType === t ? ' selected' : ''}>${t}</option>`
+    ).join('');
+    crossBlock = `
+      <div class="field" style="margin-top:14px;">
+        <label>Activity</label>
+        <select onchange="selectManualActualType(this.value)">${crossOptions}</select>
+      </div>
+      <div class="run-fields" style="margin-top:10px;">
+        <div>
+          <label>Duration</label>
+          <input type="text" placeholder="45:00" value="${escape(manualForm.duration || '')}" oninput="updateManualField('duration', this.value)" />
+          <div class="hint">m:ss or h:mm:ss</div>
+        </div>
+        <div>
+          <label>Avg HR</label>
+          <input type="number" placeholder="135" value="${escape(manualForm.avgHR || '')}" oninput="updateManualField('avgHR', this.value)" />
+          <div class="hint">bpm (optional)</div>
+        </div>
+      </div>
+    `;
+  }
+
   el.innerHTML = `
     <div style="font-size:11px;color:var(--ink-light);margin-top:14px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Status</div>
     <div class="checkin-actions">${statusBtns}</div>
     <div style="font-size:11px;color:var(--ink-light);margin-top:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">RPE — how hard?</div>
     <div class="rpe-row">${rpeBtns.join('')}</div>
     ${runBlock}
+    ${crossBlock}
     <input type="text" class="checkin-note-input" placeholder="Optional note" value="${escape(manualForm.note || '')}" oninput="updateManualField('note', this.value)" />
   `;
 }
@@ -5402,18 +5467,21 @@ function submitManualWorkout() {
     note: manualForm.note,
     loggedAt: new Date().toISOString()
   };
-  if (type === 'run') {
+  // Save type as 'run' for cross-training (the app tracks all activity under checkIns[].run)
+  const saveType = type === 'cross' ? 'run' : type;
+  if (type === 'run' || type === 'cross') {
     if (manualForm.distance) data.distance = parseFloat(manualForm.distance) || null;
     if (manualForm.duration) data.duration = manualForm.duration;
     if (manualForm.avgHR)    data.avgHR    = parseInt(manualForm.avgHR) || null;
-    if (manualForm.actualType) data.actualType = manualForm.actualType;
+    if (manualForm.actualType) data.actualType = type === 'cross' ? 'Cross' : manualForm.actualType;
   }
 
   // If editing and date/type changed, remove the old entry
+  const editSaveType = manualForm.editingType === 'cross' ? 'run' : manualForm.editingType;
   if (manualForm.editingDate && manualForm.editingType &&
-      (manualForm.editingDate !== date || manualForm.editingType !== type)) {
+      (manualForm.editingDate !== date || editSaveType !== saveType)) {
     if (checkIns[manualForm.editingDate]) {
-      delete checkIns[manualForm.editingDate][manualForm.editingType];
+      delete checkIns[manualForm.editingDate][editSaveType];
       if (Object.keys(checkIns[manualForm.editingDate]).length === 0) {
         delete checkIns[manualForm.editingDate];
       }
@@ -5421,7 +5489,7 @@ function submitManualWorkout() {
   }
 
   if (!checkIns[date]) checkIns[date] = {};
-  checkIns[date][type] = data;
+  checkIns[date][saveType] = data;
   invalidateDynamicPaceCache();
 
   // Persist
