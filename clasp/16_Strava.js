@@ -36,9 +36,9 @@ function getStravaAuthUrl(userName, passcode) {
   var clientId = props.getProperty('STRAVA_CLIENT_ID');
   if (!clientId) return { error: 'STRAVA_CLIENT_ID not configured in Script Properties.' };
 
-  // Build callback URL — the deployed web app URL
-  var scriptUrl = ScriptApp.getService().getUrl();
-  var redirectUri = scriptUrl;
+  // Redirect URI must match the Authorization Callback Domain registered in Strava.
+  // We redirect to the GitHub Pages app URL, which then forwards the code to Apps Script.
+  var redirectUri = 'https://briannabiesecker-cmd.github.io/run_coach/';
 
   // State encodes userName + passcode for verification on callback
   var state = encodeURIComponent(userName) + '::' + encodeURIComponent(passcode);
@@ -55,46 +55,27 @@ function getStravaAuthUrl(userName, passcode) {
 }
 
 /**
- * Handle the OAuth callback from Strava. Exchanges the authorization code
- * for access + refresh tokens and stores them in Script Properties.
+ * Exchange a Strava authorization code for tokens. Called from the frontend
+ * after Strava redirects back with ?code=XXX.
  *
- * Called as a GET request: ?action=stravaCallback&code=XXX&state=userName::passcode
- *
- * @param {Object} params - { code, state }
- * @return {GoogleAppsScript.Content.TextOutput} HTML redirect back to app
+ * @param {Object} params - { userName, code }
+ * @return {{success: true} | {error: string}}
  */
-function handleStravaCallback(params) {
-  var code  = params.code  || '';
-  var state = params.state || '';
+function stravaExchangeToken(params) {
+  var code     = params.code || '';
+  var userName = params.userName || '';
 
-  if (!code) {
-    return HtmlService.createHtmlOutput('<h2>Strava connection failed</h2><p>No authorization code received.</p>');
-  }
-
-  // Parse state to get userName
-  var parts = decodeURIComponent(state).split('::');
-  var userName = parts[0] || '';
-  var passcode = parts[1] || '';
-
-  if (!userName) {
-    return HtmlService.createHtmlOutput('<h2>Strava connection failed</h2><p>Missing user identity.</p>');
-  }
-
-  // Verify passcode
-  var auth = checkPasscode(passcode);
-  if (!auth.ok) {
-    return HtmlService.createHtmlOutput('<h2>Strava connection failed</h2><p>Invalid passcode.</p>');
-  }
+  if (!code) return { error: 'No authorization code provided.' };
+  if (!userName) return { error: 'Missing userName.' };
 
   var props = PropertiesService.getScriptProperties();
   var clientId     = props.getProperty('STRAVA_CLIENT_ID');
   var clientSecret = props.getProperty('STRAVA_CLIENT_SECRET');
 
-  if (!clientId || !clientSecret) {
-    return HtmlService.createHtmlOutput('<h2>Strava connection failed</h2><p>API credentials not configured.</p>');
-  }
+  if (!clientId || !clientSecret) return { error: 'Strava API credentials not configured.' };
 
-  // Exchange authorization code for tokens
+  var redirectUri = 'https://briannabiesecker-cmd.github.io/run_coach/';
+
   var response = UrlFetchApp.fetch(STRAVA_TOKEN_URL, {
     method: 'post',
     payload: {
@@ -107,12 +88,11 @@ function handleStravaCallback(params) {
   });
 
   if (response.getResponseCode() !== 200) {
-    return HtmlService.createHtmlOutput('<h2>Strava connection failed</h2><p>Token exchange error: ' + response.getContentText().slice(0, 200) + '</p>');
+    return { error: 'Token exchange failed: ' + response.getContentText().slice(0, 200) };
   }
 
   var tokenData = JSON.parse(response.getContentText());
 
-  // Store tokens server-side only
   var tokenKey = 'STRAVA_TOKEN_' + userName.toLowerCase();
   props.setProperty(tokenKey, JSON.stringify({
     access_token:  tokenData.access_token,
@@ -121,12 +101,7 @@ function handleStravaCallback(params) {
     athlete_id:    tokenData.athlete && tokenData.athlete.id
   }));
 
-  // Redirect back to the app
-  var appUrl = 'https://briannabiesecker-cmd.github.io/run_coach/?stravaConnected=1';
-  return HtmlService.createHtmlOutput(
-    '<html><head><meta http-equiv="refresh" content="0;url=' + appUrl + '"></head>' +
-    '<body><p>Strava connected! Redirecting...</p></body></html>'
-  );
+  return { success: true };
 }
 
 /**

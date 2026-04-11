@@ -9969,8 +9969,26 @@ function init() {
   renderStrengthRows();
   updatePlanPicker();
 
-  // Handle Strava OAuth redirect
+  // Handle Strava OAuth redirect — Strava sends ?code=XXX back to this page
   const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('code') && urlParams.get('scope')) {
+    const stravaCode = urlParams.get('code');
+    window.history.replaceState({}, '', window.location.pathname);
+    // Forward the code to Apps Script to exchange for tokens
+    (async function() {
+      try {
+        const name = getUserName() || '';
+        const res = await postJson({
+          action: 'stravaExchangeToken',
+          passcode: getPasscode(),
+          userName: name,
+          code: stravaCode
+        });
+        if (res.error) showToast('Strava connect failed: ' + res.error, 'error');
+        else { stravaConnected = true; updateStravaUI(); showToast('Strava connected', 'success'); }
+      } catch(e) { showToast('Strava connect failed: ' + e.message, 'error'); }
+    })();
+  }
   if (urlParams.get('stravaConnected') === '1') {
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(() => showToast('Strava connected', 'success'), 1000);
