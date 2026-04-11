@@ -4171,13 +4171,36 @@ async function loadSwitchProfileList() {
       const isCurrent = name.toLowerCase() === currentName;
       const activeClass = isCurrent ? ' style="border-color:var(--accent);background:var(--accent-bg);"' : '';
       const label = isCurrent ? display + ' <span style="font-size:10px;color:var(--accent);font-weight:700;">(current)</span>' : display;
-      return '<button class="profile-btn"' + activeClass + ' onclick="switchToProfile(\'' + name.replace(/'/g, "\\'") + '\')">' +
+      const deleteBtn = isCurrent ? '' :
+        '<span class="profile-delete" onclick="event.stopPropagation();deleteProfile(\'' + name.replace(/'/g, "\\'") + '\')" title="Delete profile" style="margin-left:auto;font-size:14px;color:var(--ink-light);padding:4px 8px;cursor:pointer;">✕</span>';
+      return '<button class="profile-btn"' + activeClass + ' onclick="switchToProfile(\'' + name.replace(/'/g, "\\'") + '\')" style="display:flex;align-items:center;">' +
              '<span class="profile-icon">🏃</span>' +
              '<span class="profile-name">' + label + '</span>' +
+             deleteBtn +
              '</button>';
     }).join('');
   } catch (e) {
     el.innerHTML = '<div style="font-size:11px;color:var(--ink-light);text-align:center;">Could not load profiles.</div>';
+  }
+}
+
+async function deleteProfile(name) {
+  if (!confirm('Delete the profile "' + name + '"? This removes their plan and all logged data from the cloud.')) return;
+  try {
+    const res = await postJson({
+      action: 'deleteUser',
+      passcode: getPasscode(),
+      userName: name
+    });
+    if (res.error) {
+      showToast('Delete failed: ' + res.error, 'error');
+      return;
+    }
+    showToast('Profile deleted', 'success');
+    // Refresh the profile list
+    loadSwitchProfileList();
+  } catch(e) {
+    showToast('Delete failed: ' + e.message, 'error');
   }
 }
 

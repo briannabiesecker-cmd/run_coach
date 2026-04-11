@@ -152,6 +152,38 @@ function listUsers() {
 }
 
 /**
+ * Delete a user's cloud data: remove the Script Property pointer and
+ * trash the per-user Google Sheet. The Sheet is moved to Drive trash
+ * (recoverable for 30 days) rather than permanently deleted.
+ *
+ * @param {string} userName - The user name to delete (case-insensitive)
+ * @return {{success: true} | {error: string}}
+ */
+function deleteUser(userName) {
+  if (!userName) return { error: 'userName is required' };
+  var key = 'USER_SHEET_' + String(userName).toLowerCase();
+  var props = PropertiesService.getScriptProperties();
+  var sheetId = props.getProperty(key);
+  if (!sheetId) return { error: 'No profile found for "' + userName + '"' };
+
+  // Move the Sheet to trash (recoverable)
+  try {
+    var file = DriveApp.getFileById(sheetId);
+    file.setTrashed(true);
+  } catch(e) {
+    // Sheet already deleted or inaccessible — continue to clean up property
+  }
+
+  // Remove the Script Property pointer
+  props.deleteProperty(key);
+
+  // Clear CacheService entry if present
+  try { CacheService.getScriptCache().remove('user_sheet_' + String(userName).toLowerCase()); } catch(e) {}
+
+  return { success: true };
+}
+
+/**
  * Schema migration entrypoint. Today this is a no-op (we're at v1).
  * When the payload schema changes, add migration steps here. Loaders
  * call this on every read so old payloads upgrade transparently.

@@ -145,6 +145,7 @@ function doPost(e) {
     else if (action === 'parseRunScreenshot') result = parseRunScreenshot(body);
     else if (action === 'loadUserData')       result = loadUserData(body);
     else if (action === 'saveUserData')       result = saveUserData(body);
+    else if (action === 'deleteUser')         result = deleteUser(body.userName);
     else                                       result = { error: 'Unknown action: ' + action };
   } catch (err) {
     result = { error: err.message || String(err) };
