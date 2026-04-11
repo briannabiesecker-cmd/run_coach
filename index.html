@@ -1270,21 +1270,13 @@
     color: var(--ink-mid);
     margin-left: 3px;
   }
-  .chart-bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 3px;
-    height: 120px;
+  .chart-svg-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  .chart-bar {
-    flex: 1;
-    border-radius: 4px 4px 0 0;
-    transition: height 0.3s ease;
-    min-height: 3px;
-  }
-  .chart-bar.current {
-    box-shadow: 0 0 0 2px var(--accent), 0 0 8px rgba(41,121,255,0.5);
-    border-radius: 4px 4px 0 0;
+  .chart-svg-wrap svg {
+    display: block;
   }
 
   /* ─── Plan workout list (Runna-style day-by-day) ─── */
@@ -3829,7 +3821,7 @@
           <div class="chart-title">Mileage Build</div>
           <div id="chart-total-mi"></div>
         </div>
-        <div class="chart-bars" id="chart-bars"></div>
+        <div class="chart-svg-wrap" id="chart-svg-wrap"></div>
         <div class="chart-legend" id="chart-legend"></div>
       </div>
     </div>
@@ -8642,18 +8634,65 @@ function renderPlan() {
     <div class="plan-workout-list-label">This week's workouts</div>
     <div class="plan-workout-list">${workoutListRows}</div>`;
 
-  // Mileage chart (full plan)
+  // Mileage chart (full plan) — SVG with Y-axis miles + X-axis date ranges
   const max = Math.max(...weeks.map(w => w.totalMiles || 0), 1);
   const totalPlanMiles = weeks.reduce((s, w) => s + (w.totalMiles || 0), 0);
   const totalEl = document.getElementById('chart-total-mi');
   if (totalEl) totalEl.innerHTML = `<span class="chart-total">${Math.round(totalPlanMiles)}</span><span class="chart-total-unit">mi total</span>`;
-  const barsEl = document.getElementById('chart-bars');
-  barsEl.innerHTML = weeks.map((w, i) => {
-    const h = Math.round((w.totalMiles / max) * 120);
+
+  const N = weeks.length;
+  const barW = Math.max(14, Math.min(22, Math.floor(360 / N)));
+  const gap = Math.max(2, Math.floor(barW * 0.15));
+  const padL = 32;  // Y-axis labels
+  const padR = 8;
+  const padTop = 8;
+  const padBot = 42; // X-axis labels (2 lines)
+  const chartH = 160;
+  const svgW = padL + N * (barW + gap) + padR;
+  const svgH = padTop + chartH + padBot;
+
+  // Y-axis gridlines + labels (0, mid, max)
+  const yMid = Math.round(max / 2);
+  const yLines = [0, yMid, Math.round(max)].map(v => {
+    const y = padTop + chartH - (v / max) * chartH;
+    return `<line x1="${padL}" y1="${y}" x2="${svgW - padR}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+      <text x="${padL - 4}" y="${y + 3}" text-anchor="end" font-size="9" fill="rgba(255,255,255,0.35)" font-family="inherit">${v}</text>`;
+  }).join('');
+
+  // Bars + X labels
+  const bars = weeks.map((w, i) => {
+    const x = padL + i * (barW + gap);
+    const h = Math.max(2, Math.round((w.totalMiles / max) * chartH));
+    const y = padTop + chartH - h;
     const color = getPhaseColor(w.phase);
     const isViewed = i === wkIdx;
-    return `<div class="chart-bar${isViewed ? ' current' : ''}" style="height:${h}px;background:${isViewed ? '#fff' : color};opacity:${isViewed ? 1 : 0.75};cursor:pointer;" onclick="viewedWeekIdx=${i};renderPlan();" title="Wk ${w.week}: ${w.totalMiles} mi"></div>`;
+    const fill = isViewed ? '#fff' : color;
+    const op = isViewed ? 1 : 0.75;
+    const outline = isViewed ? `<rect x="${x - 1}" y="${y - 1}" width="${barW + 2}" height="${h + 2}" rx="4" fill="none" stroke="${color}" stroke-width="2"/>` : '';
+
+    // X-axis label: show every Nth week to avoid crowding
+    const labelEvery = N > 18 ? 4 : N > 10 ? 3 : 2;
+    let xLabel = '';
+    if (i % labelEvery === 0 || i === N - 1 || isViewed) {
+      let dateStr = '';
+      if (planStartDate) {
+        const d = new Date(planStartDate + 'T00:00:00');
+        d.setDate(d.getDate() + i * 7);
+        dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+      xLabel = `<text x="${x + barW / 2}" y="${padTop + chartH + 14}" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,0.4)" font-family="inherit">Wk ${w.week}</text>
+        <text x="${x + barW / 2}" y="${padTop + chartH + 24}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,0.25)" font-family="inherit">${dateStr}</text>`;
+    }
+
+    // Mile count on top of bar
+    const miLabel = `<text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,${isViewed ? '0.9' : '0.3'})" font-family="inherit">${Math.round(w.totalMiles)}</text>`;
+
+    return `${outline}<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="${fill}" opacity="${op}" cursor="pointer" onclick="viewedWeekIdx=${i};renderPlan();"/>
+      ${miLabel}${xLabel}`;
   }).join('');
+
+  document.getElementById('chart-svg-wrap').innerHTML =
+    `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">${yLines}${bars}</svg>`;
 
   const phases = plan.phases || [];
   document.getElementById('chart-legend').innerHTML = phases.map(p =>
