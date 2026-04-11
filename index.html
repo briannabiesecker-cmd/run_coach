@@ -346,6 +346,16 @@
     color: #00E676;
     border: 1px solid rgba(0,230,118,0.3);
   }
+  .workout-hero-session.swapped {
+    background: rgba(245,158,11,0.08);
+    border-color: rgba(245,158,11,0.25);
+  }
+  .workout-hero-swap {
+    font-size: 11px;
+    color: #f59e0b;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
   .workout-hero-session-cta:hover { opacity: 0.92; }
   /* Hero card workout segments (PG-1) */
   .hero-segments {
@@ -7905,25 +7915,40 @@ function renderHome() {
       }
 
       const isRun = ['Easy', 'Long', 'Tempo', 'Intervals', 'Hill Repeats'].includes(today.type);
+      // Check if strength was logged instead of the planned run
+      const strengthCheckInForSwap = checkIns[todayISO()] && checkIns[todayISO()].strength;
+      const didStrengthInstead = !runLogged && strengthCheckInForSwap && strengthCheckInForSwap.status === 'done' && !isRest;
+
       let runCtaLabel, runCtaClass, runCtaAction;
       if (runLogged) {
-        runCtaLabel = `✓ Done · RPE ${runCheckIn.rpe || '—'}`;
+        // Check if actual type differs from planned
+        const swappedType = runCheckIn.actualType && runCheckIn.actualType !== today.type;
+        runCtaLabel = swappedType
+          ? `${runCheckIn.actualType} instead · RPE ${runCheckIn.rpe || '—'}`
+          : `Done · RPE ${runCheckIn.rpe || '—'}`;
         runCtaClass = 'workout-hero-session-cta done';
         runCtaAction = `onclick="openCheckInForm('run', ${JSON.stringify(runCheckIn).replace(/"/g, '&quot;')})"`;
       } else {
-        runCtaLabel = isRest ? 'Mark complete' : isRun ? 'Log run →' : 'Log workout →';
+        runCtaLabel = isRest ? 'Mark complete' : isRun ? 'Log run' : 'Log workout';
         runCtaClass = 'workout-hero-session-cta';
         runCtaAction = `onclick="openCheckInForm('run')"`;
       }
 
+      // Swap notice: strength logged but planned run wasn't
+      let swapNotice = '';
+      if (didStrengthInstead) {
+        swapNotice = `<div class="workout-hero-swap">You did a strength workout instead — that counts. Log the run as skipped or modified if you want to track it.</div>`;
+      }
+
       const runRow = `
-        <div class="workout-hero-session ${runLogged ? 'done' : ''}">
+        <div class="workout-hero-session ${runLogged ? 'done' : didStrengthInstead ? 'swapped' : ''}">
           <div class="workout-hero-session-icon">${icon}</div>
           <div class="workout-hero-session-body">
             <div class="workout-hero-session-label">${isRest ? 'Today' : isRun ? 'Run' : 'Workout'}</div>
             <div class="workout-hero-session-headline">${runHeadline}</div>
             ${runMeta ? `<div class="workout-hero-session-meta">${runMeta}</div>` : ''}
             ${runSegmentsHTML}
+            ${swapNotice}
           </div>
           <button class="${runCtaClass}" ${runCtaAction}>${runCtaLabel}</button>
         </div>`;
@@ -8018,7 +8043,10 @@ function renderHome() {
         dt.setDate(dt.getDate() + wkIdx * 7 + i);
         const iso = dt.toISOString().slice(0, 10);
         const ci = checkIns[iso] && checkIns[iso].run;
-        if (ci && ci.status === 'done') hasActualRun = true;
+        const si = checkIns[iso] && checkIns[iso].strength;
+        if (ci && (ci.status === 'done' || ci.status === 'modified')) hasActualRun = true;
+        // Also count as done if strength was logged instead (e.g., cross-training day)
+        if (!hasActualRun && si && si.status === 'done') hasActualRun = true;
       }
       // State classes
       let stateClass = '';
