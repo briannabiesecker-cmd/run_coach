@@ -4287,18 +4287,24 @@ let cloudSyncing = false;
 
 async function pullFromCloud() {
   const name = getUserName();
-  if (!name) return null;
+  if (!name) { console.warn('Cloud pull: no userName'); return null; }
+  const passcode = getPasscode();
+  if (!passcode) { console.warn('Cloud pull: no passcode'); return null; }
   try {
     const res = await postJson({
       action: 'loadUserData',
-      passcode: getPasscode(),
+      passcode: passcode,
       userName: name
     });
     if (res.error) {
       console.warn('Cloud pull failed:', res.error);
       return null;
     }
-    return res.payload || null;
+    if (!res.payload) {
+      console.warn('Cloud pull: response had no payload', JSON.stringify(res).slice(0, 200));
+      return null;
+    }
+    return res.payload;
   } catch (e) {
     console.warn('Cloud pull error:', e.message);
     return null;
@@ -4463,7 +4469,7 @@ async function hydrateFromCloudAndRoute() {
   loadRunnerProfile();
   showView('setup');
   if (cloudPayload === null && getUserName()) {
-    showToast('Could not load from cloud — create a new plan or try again', 'error');
+    showFormAlert('Could not sync your plan from the cloud. You can create a new plan below, or try refreshing.');
   }
 }
 
@@ -9266,6 +9272,8 @@ function init() {
   warmAppsScript();
   // Render the strength rows once so the empty-state shows on setup form
   renderStrengthRows();
+  // Populate plan picker from HTML defaults (Marathon is pre-selected)
+  updatePlanPicker();
   routeNext();
 }
 init();
