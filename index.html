@@ -4485,9 +4485,20 @@ async function hydrateFromCloudAndRoute() {
   if (loadPlan()) {
     renderDashboard();
     showView('dashboard');
-    // Background cloud pull disabled — local data is authoritative.
-    // Cloud sync happens via pushToCloud() after every save.
-    // Pull only happens on fresh devices with no local data (below).
+    // Push local data to cloud, then pull-verify to confirm sync
+    pushToCloud().then(function(pushResult) {
+      if (pushResult && pushResult.error) {
+        showToast('Cloud sync failed — data saved locally only', 'error');
+        return;
+      }
+      // Pull back to verify cloud has correct data
+      return pullFromCloud().then(function(cp) {
+        if (!cp || !cp.plan) return;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cp));
+        loadPlan();
+        renderDashboard();
+      });
+    }).catch(function() {});
     return;
   }
 
