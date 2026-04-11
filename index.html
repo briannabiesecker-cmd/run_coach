@@ -6799,6 +6799,33 @@ const PLAN_TEMPLATE_GRIDS = {
       if (wk <= 12) return 'Build';
       if (wk <= 21) return 'Peak';
       return 'Taper';
+    },
+    focusFor: function(wk, phase) {
+      if (phase === 'Base') return 'Build aerobic base — all easy running, no quality work';
+      var cutbacks = [7, 10, 13, 16, 19, 22];
+      if (cutbacks.indexOf(wk) !== -1) return 'Recovery week — absorb the training from the last block';
+      if (phase === 'Build') return 'Introduce tempo runs — build lactate threshold';
+      if (phase === 'Peak') return 'Tempo + intervals + MP long runs — peak fitness';
+      return 'Sharpen and rest — maintain a touch of intensity, reduce volume';
+    },
+    // Daniels 2Q: 2 quality sessions per week starting in Phase II.
+    // Cutback weeks get 1 quality or none.
+    qualityFor: function(wk) {
+      // Phase I — no quality
+      if (wk <= 6) return null;
+      // Cutback weeks — easy only
+      if ([7, 10, 13, 16, 19, 22].indexOf(wk) !== -1) return null;
+      // Phase II (8-12) — Tue tempo
+      if (wk <= 12) return { tue: 'Tempo' };
+      // Phase III (14-21) — Tue tempo + Wed intervals + MP long runs
+      if (wk <= 21) return {
+        tue: 'Tempo',
+        wed: 'Intervals', wedNote: '5-6x1000m at interval pace, 400m jog recovery',
+        sat: 'LongMP'
+      };
+      // Taper (23-26) — light tempo only
+      if (wk <= 24) return { tue: 'Tempo' };
+      return null; // final taper weeks
     }
   }
 };
@@ -6905,6 +6932,7 @@ function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
   if (daysPerWeek > 7) daysPerWeek = 7;
 
   const tueMi = base[0], wedMi = base[1], thuMi = base[2], satMi = base[3];
+  const quality = base[4] || null; // optional quality overrides object
   const minPerMi = 11.25;
   const easy = (mi) => ({ day: '', type: 'Easy', miles: mi, note: '', estimatedDurationMin: Math.round(mi * minPerMi) });
   const rest = ()    => ({ day: '', type: 'Rest', miles: 0,  note: '', estimatedDurationMin: 0 });
@@ -6912,9 +6940,72 @@ function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
   const long = (mi)  => ({ day: '', type: 'Long', miles: mi, note: 'Easy pace throughout — time on feet is the goal', estimatedDurationMin: Math.round(mi * minPerMi) });
   const race = ()    => ({ day: '', type: 'Long', miles: raceDistanceMi, note: 'RACE DAY — execute the plan, trust your training', estimatedDurationMin: Math.round(raceDistanceMi * minPerMi) });
 
+  // Quality workout builders
+  const tempo = (mi) => {
+    const warmup = Math.min(1.5, Math.round(mi * 0.2 * 10) / 10);
+    const cooldown = warmup;
+    const mainMi = Math.round((mi - warmup - cooldown) * 10) / 10;
+    return {
+      day: '', type: 'Tempo', miles: mi, note: 'Threshold effort — comfortably hard',
+      estimatedDurationMin: Math.round(mi * (minPerMi - 1.5)),
+      segments: [
+        { part: 'warmup', miles: warmup, paceTarget: 'easy' },
+        { part: 'main', miles: mainMi, paceTarget: 'tempo', note: 'Sustained tempo effort' },
+        { part: 'cooldown', miles: cooldown, paceTarget: 'easy' }
+      ]
+    };
+  };
+  const intervals = (mi, repDesc) => {
+    const warmup = Math.min(1.5, Math.round(mi * 0.2 * 10) / 10);
+    const cooldown = warmup;
+    const mainMi = Math.round((mi - warmup - cooldown) * 10) / 10;
+    return {
+      day: '', type: 'Intervals', miles: mi, note: repDesc || 'VO2max intervals',
+      estimatedDurationMin: Math.round(mi * (minPerMi - 2)),
+      segments: [
+        { part: 'warmup', miles: warmup, paceTarget: 'easy' },
+        { part: 'main', miles: mainMi, paceTarget: 'interval', note: repDesc || 'Hard repeats with jog recovery' },
+        { part: 'cooldown', miles: cooldown, paceTarget: 'easy' }
+      ]
+    };
+  };
+  const longMP = (mi, mpMi) => {
+    const easyMi = mi - mpMi;
+    return {
+      day: '', type: 'Long', miles: mi, note: 'Last ' + mpMi + 'mi at marathon pace',
+      estimatedDurationMin: Math.round(mi * minPerMi),
+      segments: [
+        { part: 'main', miles: easyMi, paceTarget: 'easy', note: 'Easy pace' },
+        { part: 'main', miles: mpMi, paceTarget: 'marathon', note: 'Marathon pace finish' }
+      ]
+    };
+  };
+
   // Start with the base 4-day shape
   let mon = rest(), tue = easy(tueMi), wed = easy(wedMi), thu = easy(thuMi), fri = rest();
   let sat = isRaceWeek ? rest() : long(satMi);
+
+  // Apply quality overrides from template
+  if (quality && !isRaceWeek) {
+    const dayMap = { tue: 1, wed: 2, thu: 3, sat: 5 };
+    const slots = [mon, tue, wed, thu, fri, sat];
+    if (quality.tue) {
+      if (quality.tue === 'Tempo') tue = tempo(tueMi);
+      else if (quality.tue === 'Intervals') tue = intervals(tueMi, quality.tueNote);
+    }
+    if (quality.wed) {
+      if (quality.wed === 'Tempo') wed = tempo(wedMi);
+      else if (quality.wed === 'Intervals') wed = intervals(wedMi, quality.wedNote);
+    }
+    if (quality.thu) {
+      if (quality.thu === 'Tempo') thu = tempo(thuMi);
+      else if (quality.thu === 'Intervals') thu = intervals(thuMi, quality.thuNote);
+    }
+    if (quality.sat === 'LongMP' && satMi >= 12) {
+      const mpMi = Math.min(Math.round(satMi * 0.4), satMi - 4);
+      sat = longMP(satMi, mpMi);
+    }
+  }
   if (isRaceWeek && sat.type === 'Rest') sat.note = 'Race day tomorrow — full rest';
   let sun = isRaceWeek ? race() : cross();
 
@@ -6979,13 +7070,16 @@ function buildPlanLocally(inputs) {
     const phase = template.phaseFor(wk);
     const isRaceWeek = wk === template.totalWeeks;
     // row[1..4] = tueMi, wedMi, thuMi, satMi from the template
-    const days = reshapeWeekForDays(daysPerWeek, [row[1], row[2], row[3], row[4]], isRaceWeek, template.raceDistanceMi);
+    // row[5] = optional quality overrides object (e.g. { tue: 'Tempo', wed: 'Intervals' })
+    const qualityOverrides = template.qualityFor ? template.qualityFor(wk) : (row[5] || null);
+    const days = reshapeWeekForDays(daysPerWeek, [row[1], row[2], row[3], row[4], qualityOverrides], isRaceWeek, template.raceDistanceMi);
     const totalMiles = days.reduce(function(s, d) { return s + (d.miles || 0); }, 0);
     return {
       week: wk,
       phase: phase,
       focus: isRaceWeek
         ? 'Race week — trust the work, run the race'
+        : template.focusFor ? template.focusFor(wk, phase)
         : (phase === 'Base'  ? 'Build the habit and accumulate easy miles'
         :  phase === 'Build' ? 'Stretch the long run; mid-week miles bump'
         :  phase === 'Peak'  ? 'Peak long runs — the hardest stretch'
@@ -6996,9 +7090,15 @@ function buildPlanLocally(inputs) {
   });
 
   const usedFallback = templateKey !== preferredKey;
-  let summary = template.label + ' — locally generated. Volume-only progression with no AI quality work. ' +
-                'Long run builds to ' + template.grid[template.totalWeeks - 2][4] + ' mi peak. ' +
-                'Race day: ' + inputs.raceDistance + '.';
+  const hasQuality = !!(template.qualityFor);
+  let summary = template.label + ' — locally generated. ';
+  if (hasQuality) {
+    summary += 'Periodized plan with tempo, intervals, and marathon-pace long runs. ';
+  } else {
+    summary += 'Volume-only progression. ';
+  }
+  summary += 'Long run builds to ' + template.grid[template.totalWeeks - 2][4] + ' mi peak. ' +
+             'Race day: ' + inputs.raceDistance + '.';
   if (usedFallback) {
     summary += ' (Detected ' + tier + ' tier from your mileage, but only novice templates are wired into the local generator. ' +
                'Regenerate via Gemini once your daily quota recovers for a tier-appropriate plan with quality work.)';
