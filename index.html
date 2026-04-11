@@ -5288,7 +5288,7 @@ function updateSwitchPlanPicker(preserveTier) {
   if (!options) return;
   const prev = preserveTier || sel.value;
   sel.innerHTML = '';
-  for (const tier of ['novice', 'intermediate', 'advanced']) {
+  for (const tier of Object.keys(options)) {
     const opt = document.createElement('option');
     opt.value = tier;
     opt.textContent = options[tier].label;
@@ -6134,7 +6134,8 @@ const PLAN_OPTIONS = {
   'Marathon': {
     novice:       { label: 'Hal Higdon Novice 1',          desc: '18 weeks · Volume only — zero quality work' },
     intermediate: { label: 'Higdon Intermediate',          desc: '18 weeks · 1 marathon-pace run/week' },
-    advanced:     { label: 'Pfitzinger 18/55',             desc: '18 weeks · 2 quality sessions + MP long runs' }
+    advanced:     { label: 'Pfitzinger 18/55',             desc: '18 weeks · 2 quality sessions + MP long runs' },
+    daniels:      { label: 'Daniels 2Q Marathon',           desc: '26 weeks · 4-phase VDOT system · 2 quality days/week' }
   }
 };
 
@@ -6157,7 +6158,7 @@ function updatePlanPicker() {
   // Remember current selection to preserve manual override
   const prev = sel.value;
   sel.innerHTML = '';
-  for (const tier of ['novice', 'intermediate', 'advanced']) {
+  for (const tier of Object.keys(options)) {
     const opt = document.createElement('option');
     opt.value = tier;
     opt.textContent = options[tier].label;
@@ -6330,6 +6331,61 @@ const PLAN_TEMPLATE_GRIDS = {
       if (wk <= 7) return 'Peak';
       return 'Taper';
     }
+  },
+
+  // ── Daniels 2Q Marathon — 26 weeks ──
+  // Jack Daniels' Running Formula "2Q" plan: 4-phase periodization
+  // with 2 quality days per week. Volume builds through Phase I-III,
+  // peaks in Phase III, then tapers. Cutback every 3rd-4th week.
+  marathon_daniels: {
+    label: 'Daniels 2Q Marathon',
+    totalWeeks: 26,
+    raceDistanceMi: 26.2,
+    grid: [
+      // Phase I — Foundation (easy volume, build base)
+      [ 1, 4, 5, 4, 8 ],
+      [ 2, 4, 5, 4, 9 ],
+      [ 3, 4, 5, 4, 10 ],
+      [ 4, 4, 5, 4, 8 ],    // cutback
+      [ 5, 5, 6, 5, 11 ],
+      [ 6, 5, 6, 5, 12 ],
+      // Phase II — Early Quality (introduce tempo + threshold)
+      [ 7, 5, 6, 5, 10 ],   // cutback
+      [ 8, 5, 7, 5, 13 ],
+      [ 9, 5, 7, 5, 14 ],
+      [10, 5, 6, 5, 11 ],   // cutback
+      [11, 6, 7, 6, 15 ],
+      [12, 6, 7, 6, 16 ],
+      // Phase III — Transition Quality (VO2max + tempo, peak volume)
+      [13, 6, 7, 6, 13 ],   // cutback
+      [14, 6, 8, 6, 17 ],
+      [15, 6, 8, 6, 18 ],
+      [16, 6, 7, 6, 14 ],   // cutback
+      [17, 6, 8, 6, 19 ],
+      [18, 6, 8, 6, 20 ],
+      // Phase IV — Final Quality (MP specificity, long runs peak)
+      [19, 6, 7, 6, 16 ],   // cutback
+      [20, 6, 8, 6, 20 ],
+      [21, 6, 8, 6, 18 ],
+      [22, 5, 7, 5, 14 ],   // cutback
+      [23, 5, 7, 5, 16 ],
+      [24, 5, 6, 5, 12 ],
+      // Taper
+      [25, 4, 5, 4, 8 ],
+      [26, 3, 4, 2, 0 ]     // race week
+    ],
+    phases: [
+      { name: 'Base',       weeks: '1-6',   goal: 'Foundation phase. Build aerobic base with easy volume. No quality work.' },
+      { name: 'Build',      weeks: '7-12',  goal: 'Early quality. Introduce tempo and threshold runs — 2 quality days per week.' },
+      { name: 'Peak',       weeks: '13-21', goal: 'Transition to race-specific work. VO2max intervals + marathon-pace long runs.' },
+      { name: 'Taper',      weeks: '22-26', goal: 'Reduce volume sharply. Maintain intensity briefly, then rest for race day.' }
+    ],
+    phaseFor: function(wk) {
+      if (wk <= 6)  return 'Base';
+      if (wk <= 12) return 'Build';
+      if (wk <= 21) return 'Peak';
+      return 'Taper';
+    }
   }
 };
 
@@ -6493,8 +6549,8 @@ function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
 function buildPlanLocally(inputs) {
   const distanceKey = getDistanceKeyFE(inputs.raceDistance);
   const tier = inputs.planTemplateTier || inferTierFromMileage(inputs.weeklyMileage, inputs.longestRecentRun);
-  // Pick the template — for v1 we only have novice grids; intermediate
-  // and advanced fall back to novice with a note.
+  // Pick the template — fall back to novice if the selected tier
+  // doesn't have a local grid yet.
   const preferredKey = distanceKey + '_' + tier;
   const fallbackKey  = distanceKey + '_novice';
   const templateKey  = PLAN_TEMPLATE_GRIDS[preferredKey] ? preferredKey : fallbackKey;
