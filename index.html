@@ -3741,8 +3741,7 @@
       <!-- Inline check-in form slot (expands when user taps Log run / Mark done) -->
       <div id="checkin-form-section"></div>
 
-      <!-- This week strip -->
-      <div id="week-strip-section"></div>
+      <!-- Week strip removed — Plan tab is the single source for weekly tracking -->
 
       <!-- Wellness footer (collapsed) -->
       <div id="wellness-section"></div>
@@ -4634,9 +4633,12 @@ function switchTab(tab) {
   });
   document.querySelectorAll('.nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
-    // Clear badge when user visits the tab
     if (b.dataset.tab === tab) b.classList.remove('has-badge');
   });
+  // Re-render the target tab so data is always fresh
+  if (tab === 'plan') renderPlan();
+  if (tab === 'performance') renderPerformance();
+  if (tab === 'home') renderHome();
 }
 
 // ─── TOAST NOTIFICATIONS ───
@@ -8034,64 +8036,7 @@ function renderHome() {
     }
   }
 
-  // ─── This week strip ───
-  const stripEl = document.getElementById('week-strip-section');
-  if (stripEl && week && week.days) {
-    const dayLetters = ['M','T','W','T','F','S','S'];
-    // Identify the long run day so we can highlight it visually
-    const stripLongRunIdx = findLongRunDayIdx(week);
-    const cells = week.days.map((d, i) => {
-      const isToday = i === dayIdx;
-      const isRest = d.type === 'Rest';
-      const isPast = i < dayIdx;
-      const isFuture = i > dayIdx;
-      let hasActualRun = false;
-      if (planStartDate) {
-        const dt = new Date(planStartDate + 'T00:00:00');
-        dt.setDate(dt.getDate() + wkIdx * 7 + i);
-        const iso = dt.toISOString().slice(0, 10);
-        const ci = checkIns[iso] && checkIns[iso].run;
-        const si = checkIns[iso] && checkIns[iso].strength;
-        if (ci && (ci.status === 'done' || ci.status === 'modified')) hasActualRun = true;
-        // Also count as done if strength was logged instead (e.g., cross-training day)
-        if (!hasActualRun && si && si.status === 'done') hasActualRun = true;
-      }
-      // State classes
-      let stateClass = '';
-      if (isRest) stateClass = ' rest';
-      else if (hasActualRun) stateClass = ' done';
-      else if (isToday) stateClass = ' today';
-      else if (isPast) stateClass = ' missed';
-      else stateClass = ' future';
-      // Type label
-      const typeKey = d.type === 'Easy' || d.type === 'Strides' ? 'easy'
-        : d.type === 'Long' ? 'long'
-        : d.type === 'Tempo' ? 'tempo'
-        : d.type === 'Intervals' || d.type === 'Hill Repeats' ? 'intervals'
-        : d.type === 'Cross' ? 'cross'
-        : 'rest';
-      const typeLabel = isRest ? 'Rest' : d.type;
-      // Status indicator
-      let statusContent = '';
-      if (!isRest) {
-        if (hasActualRun) statusContent = '<div class="day-status">\u2713</div>';
-        else if (isPast) statusContent = '<div class="day-status">\u00d7</div>';
-        else statusContent = '<div class="day-status"></div>';
-      }
-      return `
-        <div class="day-cell${stateClass}">
-          <div class="day-letter">${dayLetters[i]}</div>
-          <div class="day-type-label ${typeKey}">${typeLabel}</div>
-          <div class="day-sub">${isRest ? '' : (d.miles || 0) + 'mi'}</div>
-          ${statusContent}
-        </div>`;
-    }).join('');
-    stripEl.innerHTML = `
-      <div class="week-strip-card">
-        <div class="week-strip-label">This Week</div>
-        <div class="day-strip">${cells}</div>
-      </div>`;
-  }
+  // Week strip removed — Plan tab is the single source for weekly tracking
 
   // ─── Inline check-in form slot ───
   // The hero now shows both run and strength as session rows. When a user
