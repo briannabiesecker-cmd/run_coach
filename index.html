@@ -1446,8 +1446,8 @@
     height: 100%;
     transition: width 0.3s ease;
   }
-  .effort-seg.easy     { background: #10b981; }
-  .effort-seg.long     { background: #14b8a6; }
+  .effort-seg.easy     { background: #2979FF; }
+  .effort-seg.long     { background: #f59e0b; }
   .effort-seg.marathon { background: #f59e0b; }
   .effort-seg.tempo    { background: #ef4444; }
   .effort-seg.interval { background: #ec4899; }
@@ -8578,8 +8578,8 @@ function renderPlan() {
     if (effort.pct.interval) segs.push(`<div class="effort-seg interval" style="width:${effort.pct.interval}%"></div>`);
     if (effort.pct.cross)    segs.push(`<div class="effort-seg cross"    style="width:${effort.pct.cross}%"></div>`);
     const legend = [];
-    if (effort.pct.easy)     legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#10b981"></div>Easy ${effort.pct.easy}%</div>`);
-    if (effort.pct.long)     legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#14b8a6"></div>Long ${effort.pct.long}%</div>`);
+    if (effort.pct.easy)     legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#2979FF"></div>Easy ${effort.pct.easy}%</div>`);
+    if (effort.pct.long)     legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#f59e0b"></div>Long ${effort.pct.long}%</div>`);
     if (effort.pct.marathon) legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#f59e0b"></div>MP ${effort.pct.marathon}%</div>`);
     if (effort.pct.tempo)    legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#ef4444"></div>Tempo ${effort.pct.tempo}%</div>`);
     if (effort.pct.interval) legend.push(`<div class="effort-legend-item"><div class="effort-legend-dot" style="background:#ec4899"></div>Interval ${effort.pct.interval}%</div>`);
