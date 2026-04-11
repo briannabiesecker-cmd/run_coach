@@ -5726,16 +5726,32 @@ function updateStravaUI() {
   if (!label || !desc) return;
   if (stravaConnected) {
     label.textContent = 'Sync from Strava';
-    desc.textContent = 'Connected — tap to sync recent runs';
+    desc.innerHTML = 'Connected — tap to sync · <span onclick="event.stopPropagation();disconnectStrava();" style="color:#FF5252;cursor:pointer;">Disconnect</span>';
   } else {
     label.textContent = 'Connect Strava';
     desc.textContent = 'Auto-sync your runs from Strava';
   }
 }
 
+async function disconnectStrava() {
+  if (!confirm('Disconnect Strava? You can reconnect later.')) return;
+  try {
+    await postJson({
+      action: 'stravaDisconnect',
+      passcode: getPasscode(),
+      userName: getUserName()
+    });
+    stravaConnected = false;
+    updateStravaUI();
+    showToast('Strava disconnected', 'success');
+  } catch(e) {
+    showToast('Failed to disconnect: ' + e.message, 'error');
+  }
+}
+
 async function handleStravaConnect() {
   if (stravaConnected) {
-    syncFromStrava();
+    await syncFromStrava();
     return;
   }
   const name = getUserName();
@@ -5762,7 +5778,14 @@ async function syncFromStrava() {
       userName: name,
       days: 30
     });
-    if (res.error) { showToast(res.error, 'error'); return; }
+    if (res.error) {
+      if (res.error.indexOf('expired') !== -1 || res.error.indexOf('reconnect') !== -1) {
+        stravaConnected = false;
+        updateStravaUI();
+      }
+      showToast(res.error, 'error');
+      return;
+    }
     if (!res.activities || !res.activities.length) {
       showToast('No new runs found on Strava', '');
       return;
