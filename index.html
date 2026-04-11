@@ -7603,7 +7603,8 @@ function renderHome() {
         runCtaClass = 'workout-hero-session-cta done';
         runCtaAction = `onclick="openCheckInForm('run', ${JSON.stringify(runCheckIn).replace(/"/g, '&quot;')})"`;
       } else {
-        runCtaLabel = isRest ? 'Mark complete' : 'Log run →';
+        const isRun = ['Easy', 'Long', 'Tempo', 'Intervals', 'Hill Repeats'].includes(today.type);
+        runCtaLabel = isRest ? 'Mark complete' : isRun ? 'Log run →' : 'Log workout →';
         runCtaClass = 'workout-hero-session-cta';
         runCtaAction = `onclick="openCheckInForm('run')"`;
       }
@@ -7612,7 +7613,7 @@ function renderHome() {
         <div class="workout-hero-session ${runLogged ? 'done' : ''}">
           <div class="workout-hero-session-icon">${icon}</div>
           <div class="workout-hero-session-body">
-            <div class="workout-hero-session-label">${isRest ? 'Today' : 'Run'}</div>
+            <div class="workout-hero-session-label">${isRest ? 'Today' : isRun ? 'Run' : 'Workout'}</div>
             <div class="workout-hero-session-headline">${runHeadline}</div>
             ${runMeta ? `<div class="workout-hero-session-meta">${runMeta}</div>` : ''}
             ${runSegmentsHTML}
