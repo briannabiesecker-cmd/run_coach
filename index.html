@@ -8482,22 +8482,16 @@ function renderPlan() {
     const hasStrOnRest = isRest && !hasRunOnRest && si && si.status === 'done';
     let stateClass = '';
     let statusBadge = '';
-    if (hasRunOnRest)               { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Bonus</div>'; }
+    if (hasRunOnRest)               { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
     else if (hasStrOnRest)          { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
     else if (status === 'done')          { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
     else if (status === 'skipped')  { stateClass = 'skipped';  statusBadge = '<div class="pwr-status skipped">Skipped</div>'; }
     else if (status === 'modified') { stateClass = 'modified'; statusBadge = '<div class="pwr-status modified">Modified</div>'; }
     else if (si && si.status === 'done' && !isRest) { stateClass = 'done'; statusBadge = '<div class="pwr-status done">Done</div>'; }
 
-    // Headline
+    // Headline — always shows the plan; actual stats go in the green "Logged:" line
     let headline;
-    if (hasRunOnRest) {
-      const bonusMi = ci && ci.distance ? ci.distance + ' mi' : '';
-      const bonusType = ci && ci.actualType ? ci.actualType : 'Run';
-      headline = `${escape(bonusType)}<span class="pwr-miles">${bonusMi}</span><span class="pwr-long-badge" style="background:rgba(41,121,255,0.2);color:#2979FF;">BONUS</span>`;
-    } else if (hasStrOnRest) {
-      headline = 'Strength';
-    } else if (isRest) {
+    if (isRest) {
       headline = 'Rest day';
     } else {
       const longBadge = isLong ? '<span class="pwr-long-badge">LONG</span>' : '';
@@ -8529,7 +8523,7 @@ function renderPlan() {
 
     // Actual logged stats (shown below planned when workout is done)
     let actualHTML = '';
-    if (ci && (status === 'done' || status === 'modified') && !isRest) {
+    if (ci && (status === 'done' || status === 'modified')) {
       const parts = [];
       if (ci.distance) parts.push(`${ci.distance} mi`);
       if (ci.duration) parts.push(ci.duration);
