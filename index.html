@@ -9518,7 +9518,7 @@ function renderRacePredictions() {
     vdotScore = dynamicZones._vdot;
     const best = dynamicZones._sample;
     const effortDate = new Date(best.bestEffortISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    sourceLabel = `VDOT ${vdotScore} · Best of ${best.total} runs · ${best.bestEffortDist}mi @ ${best.bestEffortPace}/mi on ${effortDate}`;
+    sourceLabel = `VDOT ${vdotScore} · ${best.bestEffortDist}mi @ ${best.bestEffortPace}/mi on ${effortDate} (fastest of ${best.total} runs)`;
     // Set anchor for fallback path (not used when useVDOT is true)
     anchorDistMi = parseFloat(best.bestEffortDist);
     const paceMin = parsePaceMinutes(best.bestEffortPace + '/mi');
