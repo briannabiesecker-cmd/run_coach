@@ -7003,27 +7003,6 @@ function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
   let mon = rest(), tue = easy(tueMi), wed = easy(wedMi), thu = easy(thuMi), fri = rest();
   let sat = isRaceWeek ? rest() : long(satMi);
 
-  // Apply quality overrides from template
-  if (quality && !isRaceWeek) {
-    const dayMap = { tue: 1, wed: 2, thu: 3, sat: 5 };
-    const slots = [mon, tue, wed, thu, fri, sat];
-    if (quality.tue) {
-      if (quality.tue === 'Tempo') tue = tempo(tueMi);
-      else if (quality.tue === 'Intervals') tue = intervals(tueMi, quality.tueNote);
-    }
-    if (quality.wed) {
-      if (quality.wed === 'Tempo') wed = tempo(wedMi);
-      else if (quality.wed === 'Intervals') wed = intervals(wedMi, quality.wedNote);
-    }
-    if (quality.thu) {
-      if (quality.thu === 'Tempo') thu = tempo(thuMi);
-      else if (quality.thu === 'Intervals') thu = intervals(thuMi, quality.thuNote);
-    }
-    if (quality.sat === 'LongMP' && satMi >= 12) {
-      const mpMi = Math.min(Math.round(satMi * 0.4), satMi - 4);
-      sat = longMP(satMi, mpMi);
-    }
-  }
   if (isRaceWeek && sat.type === 'Rest') sat.note = 'Race day tomorrow — full rest';
   let sun = isRaceWeek ? race() : cross();
 
@@ -7061,6 +7040,40 @@ function reshapeWeekForDays(daysPerWeek, base, isRaceWeek, raceDistanceMi) {
 
   // Race week: always single race day, surrounding days are taper
   // (already handled above by isRaceWeek branches; sat=rest, sun=race)
+
+  // Apply quality overrides AFTER days-per-week reshaping.
+  // Only apply to days that are still running days (not dropped to rest).
+  // If a quality day was dropped (e.g., Wed intervals on 3-day plan),
+  // try to move it to the next available easy day.
+  if (quality && !isRaceWeek) {
+    const applyQuality = (dayVar, mi, qType, qNote) => {
+      if (qType === 'Tempo') return tempo(mi);
+      if (qType === 'Intervals') return intervals(mi, qNote);
+      return dayVar;
+    };
+    // Tuesday quality
+    if (quality.tue && tue.type === 'Easy' && tue.miles > 0) {
+      tue = applyQuality(tue, tue.miles, quality.tue, quality.tueNote);
+    }
+    // Wednesday quality — may have been dropped on 3-day plans
+    if (quality.wed) {
+      if (wed.type === 'Easy' && wed.miles > 0) {
+        wed = applyQuality(wed, wed.miles, quality.wed, quality.wedNote);
+      } else if (thu.type === 'Easy' && thu.miles > 0) {
+        // Move Wed quality to Thu if Wed was dropped
+        thu = applyQuality(thu, thu.miles, quality.wed, quality.wedNote);
+      }
+    }
+    // Thursday quality
+    if (quality.thu && thu.type === 'Easy' && thu.miles > 0) {
+      thu = applyQuality(thu, thu.miles, quality.thu, quality.thuNote);
+    }
+    // Saturday MP long run
+    if (quality.sat === 'LongMP' && sat.type === 'Long' && sat.miles >= 12) {
+      const mpMi = Math.min(Math.round(sat.miles * 0.4), sat.miles - 4);
+      sat = longMP(sat.miles, mpMi);
+    }
+  }
 
   // Stamp the day labels
   mon.day = 'Mon'; tue.day = 'Tue'; wed.day = 'Wed'; thu.day = 'Thu';
