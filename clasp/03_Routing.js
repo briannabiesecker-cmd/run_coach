@@ -146,6 +146,7 @@ function doPost(e) {
     else if (action === 'loadUserData')       result = loadUserData(body);
     else if (action === 'saveUserData')       result = saveUserData(body);
     else if (action === 'deleteUser')         result = deleteUser(body.userName);
+    else if (action === 'analyzeRun')        result = analyzeRun(body);
     else                                       result = { error: 'Unknown action: ' + action };
   } catch (err) {
     result = { error: err.message || String(err) };
