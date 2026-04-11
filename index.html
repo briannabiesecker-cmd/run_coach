@@ -3148,11 +3148,11 @@
             <div class="settings-desc">View and remove added races</div>
           </div>
         </button>
-        <button class="settings-item" onclick="closeSettingsMenu();resetPlan();">
+        <button class="settings-item" onclick="closeSettingsMenu();openSwitchPlanModal();">
           <span class="settings-icon">🔄</span>
           <div class="settings-text">
-            <div class="settings-label">Start a new plan</div>
-            <div class="settings-desc">Erase current plan and restart</div>
+            <div class="settings-label">Change training plan</div>
+            <div class="settings-desc">Switch template, distance, or race date — keeps your logged runs</div>
           </div>
         </button>
       </div>
@@ -3456,6 +3456,46 @@
       </div>
       <button class="btn-primary" onclick="submitAddRace()" style="margin-top:14px;">Add race & adjust plan</button>
       <button class="btn-ghost" onclick="closeAddRaceModal()" style="margin-top:8px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═════════ SWITCH-PLAN MODAL ═════════ -->
+  <div id="switch-plan-modal" class="modal-backdrop" onclick="if(event.target===this)closeSwitchPlanModal()">
+    <div class="modal-card" style="max-width:380px;">
+      <div class="modal-title">🔄 Change training plan</div>
+      <div style="font-size:12px;color:var(--ink-mid);background:var(--bg-elev-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;line-height:1.5;">
+        Your logged runs, wellness data, and profile are safe. Only the workout schedule changes.
+      </div>
+      <div id="switch-plan-alert" class="alert error hidden" style="margin-bottom:10px;"></div>
+      <div class="field">
+        <label>Race name</label>
+        <input type="text" id="switch-plan-race-name" placeholder="e.g. Richmond Marathon" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Race distance</label>
+          <select id="switch-plan-distance" onchange="updateSwitchPlanPicker()">
+            <option value="5K">5K</option>
+            <option value="10K">10K</option>
+            <option value="Half Marathon">Half Marathon</option>
+            <option value="Marathon">Marathon</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Race date</label>
+          <input type="date" id="switch-plan-date" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Training plan</label>
+        <select id="switch-plan-template" onchange="updateSwitchPlanDesc()"></select>
+        <div id="switch-plan-template-desc" style="font-size:11px;color:var(--ink-light);margin-top:4px;"></div>
+      </div>
+      <button class="btn-primary" onclick="submitSwitchPlan()" style="margin-top:14px;">Rebuild plan</button>
+      <button class="btn-ghost" onclick="closeSwitchPlanModal()" style="margin-top:8px;">Cancel</button>
+      <div style="text-align:center;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+        <a href="#" onclick="event.preventDefault();closeSwitchPlanModal();resetPlan();" style="font-size:11px;color:var(--ink-light);">Or erase everything and start fresh</a>
+      </div>
     </div>
   </div>
 
@@ -4450,6 +4490,25 @@ function loadPlan() {
     // Initialize the additional-races array if missing (for plans
     // generated before the races feature shipped)
     if (!Array.isArray(plan.races)) plan.races = [];
+    // Backfill planTemplate for plans created before the plan picker
+    if (!plan.planTemplate) {
+      // Try to derive from generatedBy (e.g. 'local-marathon_novice')
+      const gb = plan.generatedBy || '';
+      const m = gb.match(/local-(\w+)_(novice|intermediate|advanced)/);
+      if (m) {
+        const distMap = { marathon: 'Marathon', half: 'Half Marathon', '10k': '10K', '5k': '5K' };
+        const dist = distMap[m[1]] || '';
+        const tier = m[2];
+        if (dist && PLAN_OPTIONS[dist] && PLAN_OPTIONS[dist][tier]) {
+          plan.planTemplate = PLAN_OPTIONS[dist][tier].label;
+        }
+      }
+      // Fallback: use the template grid label if available
+      if (!plan.planTemplate && PLAN_TEMPLATE_GRIDS) {
+        const key = gb.replace('local-', '');
+        if (PLAN_TEMPLATE_GRIDS[key]) plan.planTemplate = PLAN_TEMPLATE_GRIDS[key].label;
+      }
+    }
     ensurePlanStartIsMonday(); // migrate old plans whose start wasn't a Monday
     return true;
   } catch(e) { return false; }
@@ -5216,6 +5275,115 @@ function openSettingsMenu() {
 }
 function closeSettingsMenu() {
   document.getElementById('settings-modal').classList.remove('open');
+}
+
+// ─── SWITCH PLAN MODAL ───
+function openSwitchPlanModal() {
+  const modal = document.getElementById('switch-plan-modal');
+  // Pre-fill from current plan
+  document.getElementById('switch-plan-race-name').value = (plan && plan.raceName) || '';
+  document.getElementById('switch-plan-distance').value = (plan && plan.raceDistance) || 'Marathon';
+  document.getElementById('switch-plan-date').value = (plan && plan.raceDate) || '';
+  // Infer current tier from generatedBy (e.g. 'local-marathon_novice')
+  let currentTier = 'novice';
+  if (plan && plan.generatedBy) {
+    const m = plan.generatedBy.match(/_(novice|intermediate|advanced)/);
+    if (m) currentTier = m[1];
+  }
+  // Populate template dropdown
+  updateSwitchPlanPicker(currentTier);
+  document.getElementById('switch-plan-alert').classList.add('hidden');
+  modal.classList.add('open');
+}
+
+function closeSwitchPlanModal() {
+  document.getElementById('switch-plan-modal').classList.remove('open');
+}
+
+function updateSwitchPlanPicker(preserveTier) {
+  const sel = document.getElementById('switch-plan-template');
+  const distance = document.getElementById('switch-plan-distance').value;
+  const options = PLAN_OPTIONS[distance];
+  if (!options) return;
+  const prev = preserveTier || sel.value;
+  sel.innerHTML = '';
+  for (const tier of ['novice', 'intermediate', 'advanced']) {
+    const opt = document.createElement('option');
+    opt.value = tier;
+    opt.textContent = options[tier].label;
+    sel.appendChild(opt);
+  }
+  sel.value = (prev && options[prev]) ? prev : 'novice';
+  updateSwitchPlanDesc();
+}
+
+function updateSwitchPlanDesc() {
+  const distance = document.getElementById('switch-plan-distance').value;
+  const tier = document.getElementById('switch-plan-template').value;
+  const descEl = document.getElementById('switch-plan-template-desc');
+  const options = PLAN_OPTIONS[distance];
+  descEl.textContent = (options && options[tier]) ? options[tier].desc : '';
+}
+
+function submitSwitchPlan() {
+  const raceName = document.getElementById('switch-plan-race-name').value;
+  const distance = document.getElementById('switch-plan-distance').value;
+  const raceDate = document.getElementById('switch-plan-date').value;
+  const tier = document.getElementById('switch-plan-template').value;
+  const alertEl = document.getElementById('switch-plan-alert');
+
+  if (!distance || !raceDate) {
+    alertEl.textContent = 'Please pick a distance and date.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+
+  const templateLabel = (PLAN_OPTIONS[distance] && PLAN_OPTIONS[distance][tier])
+    ? PLAN_OPTIONS[distance][tier].label : '';
+  const p = runnerProfile || {};
+
+  try {
+    const newPlan = buildPlanLocally({
+      raceName: raceName || 'Your race',
+      raceDate: raceDate,
+      raceDistance: distance,
+      weeklyMileage: p.weeklyMileage,
+      longestRecentRun: p.longestRecentRun,
+      goalTime: p.goalTime,
+      daysPerWeek: p.daysPerWeek || '4',
+      longRunDay: p.longRunDay,
+      injuryNotes: p.injuryNotes,
+      planTemplateTier: tier,
+      planTemplateLabel: templateLabel
+    });
+
+    if (!newPlan || !Array.isArray(newPlan.weeks) || newPlan.weeks.length === 0) {
+      throw new Error('Could not generate plan.');
+    }
+
+    // Clear stale weekly reviews (keyed by week index, no longer valid)
+    weeklyReviews = {};
+
+    // Compute planStartDate
+    const oldRaceDate = plan && plan.raceDate;
+    if (raceDate !== oldRaceDate) {
+      // Race date changed — recompute start so plan ends on race week
+      const rd = new Date(raceDate + 'T00:00:00');
+      rd.setDate(rd.getDate() - (newPlan.weeks.length * 7));
+      // Snap to Monday
+      while (rd.getDay() !== 1) rd.setDate(rd.getDate() - 1);
+      planStartDate = rd.toISOString().slice(0, 10);
+    }
+    // If same race date, planStartDate stays (savePlan preserves it with isNewPlan: false)
+
+    savePlan(newPlan, { isNewPlan: false });
+    invalidateDynamicPaceCache();
+    renderDashboard();
+    closeSwitchPlanModal();
+  } catch(e) {
+    alertEl.textContent = 'Error: ' + e.message;
+    alertEl.classList.remove('hidden');
+  }
 }
 function openEditWeekMenu() {
   document.getElementById('edit-week-modal').classList.add('open');
