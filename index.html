@@ -8412,7 +8412,10 @@ function renderPlan() {
       if (!hasActual && si && si.status === 'done') hasActual = true;
     }
     let stateClass = '';
-    if (isRest) stateClass = ' rest';
+    // Rest day with logged activity = bonus run
+    const isBonus = isRest && hasActual;
+    if (isBonus) stateClass = ' done';
+    else if (isRest) stateClass = ' rest';
     else if (hasActual) stateClass = ' done';
     else if (isToday) stateClass = ' today';
     else if (isPast) stateClass = ' missed';
@@ -8421,17 +8424,29 @@ function renderPlan() {
       : d.type === 'Long' ? 'long' : d.type === 'Tempo' ? 'tempo'
       : d.type === 'Intervals' || d.type === 'Hill Repeats' ? 'intervals'
       : d.type === 'Cross' ? 'cross' : 'rest';
-    const typeLabel = isRest ? 'Rest' : d.type;
+    const typeLabel = isBonus ? 'Bonus' : (isRest ? 'Rest' : d.type);
     let statusContent = '';
-    if (!isRest) {
+    if (isBonus) {
+      statusContent = '<div class="day-status">\u2713</div>';
+    } else if (!isRest) {
       if (hasActual) statusContent = '<div class="day-status">\u2713</div>';
       else if (isPast) statusContent = '<div class="day-status">\u00d7</div>';
       else statusContent = '<div class="day-status"></div>';
     }
+    // For bonus runs, show logged distance
+    let subText = isRest && !isBonus ? '' : (d.miles || 0) + 'mi';
+    if (isBonus && planStartDate) {
+      const bd = new Date(planStartDate + 'T00:00:00');
+      bd.setDate(bd.getDate() + wkIdx * 7 + i);
+      const biso = bd.toISOString().slice(0, 10);
+      const bci = checkIns[biso] && checkIns[biso].run;
+      if (bci && bci.distance) subText = bci.distance + 'mi';
+      else subText = 'Extra';
+    }
     return `<div class="day-cell${stateClass}" ${onClick} style="cursor:pointer;">
       <div class="day-letter">${dayLabels[i]}</div>
-      <div class="day-type-label ${typeKey}">${typeLabel}</div>
-      <div class="day-sub">${isRest ? '' : (d.miles || 0) + 'mi'}</div>
+      <div class="day-type-label ${isBonus ? 'easy' : typeKey}">${typeLabel}</div>
+      <div class="day-sub">${subText}</div>
       ${statusContent}
     </div>`;
   }).join('');
@@ -8456,20 +8471,26 @@ function renderPlan() {
       dateDayName = dt.toLocaleDateString('en-US', { weekday: 'short' });
     }
 
-    // Completion state — check run OR strength (same logic as week strip)
+    // Completion state — check run OR strength
     const ci = cellISO && checkIns[cellISO] && checkIns[cellISO].run;
     const si = cellISO && checkIns[cellISO] && checkIns[cellISO].strength;
     const status = ci ? ci.status : null;
+    const isBonus = isRest && (status === 'done' || (si && si.status === 'done'));
     let stateClass = '';
     let statusBadge = '';
-    if (status === 'done')          { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
+    if (isBonus)                    { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Bonus</div>'; }
+    else if (status === 'done')          { stateClass = 'done';     statusBadge = '<div class="pwr-status done">Done</div>'; }
     else if (status === 'skipped')  { stateClass = 'skipped';  statusBadge = '<div class="pwr-status skipped">Skipped</div>'; }
     else if (status === 'modified') { stateClass = 'modified'; statusBadge = '<div class="pwr-status modified">Modified</div>'; }
     else if (si && si.status === 'done' && !isRest) { stateClass = 'done'; statusBadge = '<div class="pwr-status done">Strength</div>'; }
 
     // Headline
     let headline;
-    if (isRest) {
+    if (isBonus) {
+      const bonusMi = ci && ci.distance ? ci.distance + ' mi' : '';
+      const bonusType = ci && ci.actualType ? ci.actualType : 'Run';
+      headline = `${escape(bonusType)}<span class="pwr-miles">${bonusMi}</span><span class="pwr-long-badge" style="background:rgba(41,121,255,0.2);color:#2979FF;">BONUS</span>`;
+    } else if (isRest) {
       headline = 'Rest day';
     } else {
       const longBadge = isLong ? '<span class="pwr-long-badge">LONG</span>' : '';
